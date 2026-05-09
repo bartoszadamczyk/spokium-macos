@@ -31,6 +31,9 @@ playground.xcworkspace
 
 .build/
 
+# Local-built whisper.cpp XCFramework — too big to commit, rebuild from whisper.cpp source
+Vox/Frameworks/whisper.xcframework/
+
 # CocoaPods
 #
 # We recommend against adding the Pods directory to your .gitignore. However
@@ -60,3 +63,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# MacOS
+.DS_Store
+
+#JetBrains
+.idea
