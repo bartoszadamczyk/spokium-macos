@@ -112,10 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             accessibilityDescription: nil
         )
 
-        if recording {
-            recordingOverlay.show()
+        switch state {
+        case .recording:
+            recordingOverlay.show(mode: .recording)
             startPulse()
-        } else {
+        case .finishing:
+            recordingOverlay.show(mode: .transcribing)
+            stopPulse()
+        case .idle:
             recordingOverlay.hide()
             stopPulse()
         }

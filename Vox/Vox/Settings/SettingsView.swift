@@ -12,7 +12,7 @@ struct SettingsView: View {
             DictionaryTab()
                 .tabItem { Label("Dictionary", systemImage: "text.book.closed") }
         }
-        .frame(width: 480, height: 320)
+        .frame(width: 600, height: 400)
     }
 }
 
@@ -20,6 +20,8 @@ private struct GeneralTab: View {
     @AppStorage("selectedLanguage") private var selectedLanguage = "auto"
     @AppStorage("paragraphSplitting") private var paragraphSplitting = true
     @AppStorage("silenceThreshold") private var silenceThreshold = 1.5
+    @AppStorage("autoPaste") private var autoPaste = true
+    @AppStorage("preserveClipboard") private var preserveClipboard = true
 
     var body: some View {
         Form {
@@ -45,6 +47,12 @@ private struct GeneralTab: View {
                             .monospacedDigit()
                             .frame(width: 30, alignment: .trailing)
                     }
+                }
+            }
+            Section("Output") {
+                Toggle("Auto-paste into focused window", isOn: $autoPaste)
+                if autoPaste {
+                    Toggle("Restore clipboard after paste", isOn: $preserveClipboard)
                 }
             }
         }
@@ -86,12 +94,26 @@ private struct ModelTab: View {
     }
 
     var body: some View {
-        List {
-            ForEach(WhisperModel.all) { model in
-                ModelRow(model: model, manager: modelManager)
+        VStack(spacing: 0) {
+            List {
+                ForEach(WhisperModel.all) { model in
+                    ModelRow(model: model, manager: modelManager)
+                }
             }
+            .listStyle(.inset)
+
+            HStack {
+                Button("Show in Finder") {
+                    try? ModelLocator.ensureDirectoryExists()
+                    NSWorkspace.shared.open(ModelLocator.modelsDirectory)
+                }
+                .buttonStyle(.link)
+                .font(.callout)
+                Spacer()
+            }
+            .padding(.leading, 12)
+            .padding(.vertical, 8)
         }
-        .listStyle(.inset)
         .alert("Download Failed", isPresented: showError) {
             Button("OK") { modelManager.dismissDownloadError() }
         } message: {
@@ -177,3 +199,4 @@ private struct DictionaryTab: View {
         .padding()
     }
 }
+

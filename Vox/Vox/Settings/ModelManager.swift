@@ -1,3 +1,4 @@
+import CommonCrypto
 import Foundation
 import OSLog
 
@@ -7,6 +8,7 @@ struct WhisperModel: Identifiable, Equatable {
     let sizeLabel: String
     let qualityNote: String
     let fileName: String
+    let expectedSHA1: String
 
     var id: String { name }
 
@@ -22,34 +24,84 @@ struct WhisperModel: Identifiable, Equatable {
         WhisperModel(
             name: "tiny", displayName: "Tiny",
             sizeLabel: "~75 MB", qualityNote: "Fastest, lower accuracy",
-            fileName: "ggml-tiny.bin"
+            fileName: "ggml-tiny.bin",
+            expectedSHA1: "bd577a113a864445d4c299885e0cb97d4ba92b5f"
         ),
         WhisperModel(
             name: "base", displayName: "Base",
             sizeLabel: "~142 MB", qualityNote: "Good balance for short dictation",
-            fileName: "ggml-base.bin"
+            fileName: "ggml-base.bin",
+            expectedSHA1: "465707469ff3a37a2b9b8d8f89f2f99de7299dac"
         ),
         WhisperModel(
             name: "small", displayName: "Small",
             sizeLabel: "~466 MB", qualityNote: "Better accuracy, still fast on Apple Silicon",
-            fileName: "ggml-small.bin"
+            fileName: "ggml-small.bin",
+            expectedSHA1: "55356645c2b361a969dfd0ef2c5a50d530afd8d5"
         ),
         WhisperModel(
             name: "medium", displayName: "Medium",
             sizeLabel: "~1.5 GB", qualityNote: "High accuracy, slower",
-            fileName: "ggml-medium.bin"
+            fileName: "ggml-medium.bin",
+            expectedSHA1: "fd9727b6e1217c2f614f9b698455c4ffd82463b4"
         ),
         WhisperModel(
             name: "large-v3", displayName: "Large v3",
             sizeLabel: "~3.1 GB", qualityNote: "Best accuracy",
-            fileName: "ggml-large-v3.bin"
+            fileName: "ggml-large-v3.bin",
+            expectedSHA1: "ad82bf6a9043ceed055076d0fd39f5f186ff8062"
         ),
         WhisperModel(
             name: "large-v3-turbo", displayName: "Large v3 Turbo",
             sizeLabel: "~809 MB", qualityNote: "Near-best accuracy, much faster",
-            fileName: "ggml-large-v3-turbo.bin"
+            fileName: "ggml-large-v3-turbo.bin",
+            expectedSHA1: "4af2b29d7ec73d781377bfd1758ca957a807e941"
         ),
     ]
+
+    static func validateFile(at url: URL, expectedSHA1: String) throws {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        guard let magicData = try handle.read(upToCount: 4), magicData.count == 4 else {
+            throw ModelValidationError.notGGML
+        }
+        let magic = magicData.withUnsafeBytes { $0.load(as: UInt32.self) }
+        let validMagic: Set<UInt32> = [0x67676D6C, 0x67676D66, 0x67676A74]
+        if !validMagic.contains(magic) {
+            throw ModelValidationError.notGGML
+        }
+
+        try handle.seek(toOffset: 0)
+        var context = CC_SHA1_CTX()
+        CC_SHA1_Init(&context)
+        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+            chunk.withUnsafeBytes { ptr in
+                _ = CC_SHA1_Update(&context, ptr.baseAddress, CC_LONG(ptr.count))
+            }
+        }
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        CC_SHA1_Final(&digest, &context)
+        let actualSHA1 = digest.map { String(format: "%02x", $0) }.joined()
+
+        if actualSHA1 != expectedSHA1 {
+            throw ModelValidationError.checksumMismatch(expected: expectedSHA1, actual: actualSHA1)
+        }
+    }
+}
+
+enum ModelValidationError: LocalizedError {
+    case notGGML
+    case checksumMismatch(expected: String, actual: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notGGML:
+            return "File is not a valid GGML model — it may be an error page or corrupted download"
+        case .checksumMismatch:
+            return "SHA-1 checksum mismatch — the download may be corrupted or incomplete"
+        }
+    }
 }
 
 @Observable
@@ -175,14 +227,11 @@ final class ModelManager {
                 throw CancellationError()
             }
 
-            let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
-            let fileSize = attrs[.size] as? Int64 ?? 0
-            if fileSize < 1_000_000 {
+            do {
+                try WhisperModel.validateFile(at: tempURL, expectedSHA1: model.expectedSHA1)
+            } catch {
                 try? FileManager.default.removeItem(at: tempURL)
-                throw URLError(
-                    .dataLengthExceedsMaximum,
-                    userInfo: [NSLocalizedDescriptionKey: "Downloaded file too small (\(fileSize) bytes) — likely not a valid model"]
-                )
+                throw error
             }
 
             if FileManager.default.fileExists(atPath: model.localURL.path) {

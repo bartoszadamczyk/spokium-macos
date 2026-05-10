@@ -6,18 +6,28 @@ enum Paster {
 
     @discardableResult
     static func paste(_ text: String) async -> Bool {
+        let defaults = UserDefaults.standard
+        let autoPaste = defaults.object(forKey: "autoPaste") as? Bool ?? true
+        let preserveClipboard = defaults.object(forKey: "preserveClipboard") as? Bool ?? true
+
         let pasteboard = NSPasteboard.general
-        let savedData = savePasteboard(pasteboard)
+        let savedData = preserveClipboard && autoPaste ? savePasteboard(pasteboard) : nil
         let changeCountAfterWrite = writeToPasteboard(pasteboard, text: text)
+
+        guard autoPaste else { return true }
 
         guard simulateCommandV() else {
             logger.error("Failed to simulate ⌘V — check Accessibility permission")
-            restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
+            if let savedData {
+                restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
+            }
             return false
         }
 
-        try? await Task.sleep(for: .milliseconds(150))
-        restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
+        if let savedData {
+            try? await Task.sleep(for: .milliseconds(150))
+            restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
+        }
         return true
     }
 
