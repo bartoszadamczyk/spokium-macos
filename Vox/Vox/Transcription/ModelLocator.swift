@@ -4,7 +4,7 @@ enum ModelLocator {
     static var modelsDirectory: URL {
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("whisper-macos/models", isDirectory: true)
+        return appSupport.appendingPathComponent("vox-macos/models", isDirectory: true)
     }
 
     static func ensureDirectoryExists() throws {
@@ -12,6 +12,28 @@ enum ModelLocator {
             at: modelsDirectory,
             withIntermediateDirectories: true
         )
+    }
+
+    static func migrateFromOldDirectory() {
+        let appSupport = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let oldDir = appSupport.appendingPathComponent("whisper-macos/models", isDirectory: true)
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: oldDir.path) else { return }
+
+        guard let files = try? fm.contentsOfDirectory(at: oldDir, includingPropertiesForKeys: nil) else { return }
+        try? ensureDirectoryExists()
+        for file in files where file.pathExtension == "bin" {
+            let dest = modelsDirectory.appendingPathComponent(file.lastPathComponent)
+            if !fm.fileExists(atPath: dest.path) {
+                try? fm.moveItem(at: file, to: dest)
+            }
+        }
+        try? fm.removeItem(at: oldDir)
+        let oldParent = appSupport.appendingPathComponent("whisper-macos", isDirectory: true)
+        if let remaining = try? fm.contentsOfDirectory(atPath: oldParent.path), remaining.isEmpty {
+            try? fm.removeItem(at: oldParent)
+        }
     }
 
     static func availableModels() -> [URL] {

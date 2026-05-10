@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 
 enum AudioLoaderError: Error {
     case unsupportedFormat
@@ -42,14 +42,17 @@ enum AudioLoader {
             throw AudioLoaderError.unsupportedFormat
         }
 
-        var consumed = false
+        nonisolated(unsafe) let consumed = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+        consumed.initialize(to: false)
+        defer { consumed.deallocate() }
+
         var error: NSError?
         let status = converter.convert(to: outputBuffer, error: &error) { _, statusPtr in
-            if consumed {
+            if consumed.pointee {
                 statusPtr.pointee = .endOfStream
                 return nil
             }
-            consumed = true
+            consumed.pointee = true
             statusPtr.pointee = .haveData
             return inputBuffer
         }

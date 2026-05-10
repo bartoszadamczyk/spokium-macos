@@ -10,7 +10,7 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 
 - **Language:** Swift 5.9+.
 - **UI:** SwiftUI for the settings window and `MenuBarExtra`. AppKit only where SwiftUI can't reach (global hotkeys, synthesized keystrokes).
-- **Min target:** macOS 15. Gives us current SwiftUI APIs and is recent enough that sandbox + Accessibility behaviour is well-documented and predictable.
+- **Min target:** macOS 26.3. Required for `NSHostingSceneRepresentation` used to open Settings from AppKit menu bar code.
 - **Sandboxed.** The app runs under App Sandbox. This costs us nothing functionally (Accessibility-driven ⌘V, global hotkeys, and microphone all work in sandbox once the user grants the relevant permissions) and keeps the Mac App Store as a future option.
 - **IDE:** Xcode. The project is an Xcode app target, not a SwiftPM executable, because we need an `.app` bundle, `Info.plist`, entitlements, and a menu-bar `LSUIElement` flag.
 - **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via a locally-built XCFramework. The user clones `whisper.cpp` next to this repo, runs `./build-xcframework.sh`, and copies the resulting `whisper.xcframework` into `Vox/Frameworks/`. The framework is gitignored. See `README.md` § "Building from source" for the exact steps. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Vox`, so no collision. Models downloaded at runtime, not bundled.

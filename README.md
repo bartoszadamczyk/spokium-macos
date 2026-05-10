@@ -74,7 +74,7 @@ These settings must be applied to the Vox target on a fresh checkout (they live 
 
 | Where | Setting | Value |
 |---|---|---|
-| General → Minimum Deployments | macOS | **15.0** |
+| General → Minimum Deployments | macOS | **26.3** |
 | Signing & Capabilities → App Sandbox | Audio Input | ✓ |
 | Signing & Capabilities → App Sandbox | Outgoing Connections (Client) | ✓ |
 | Build Settings | `INFOPLIST_KEY_LSUIElement` | **YES** (no dock icon) |
@@ -136,7 +136,7 @@ Phases:
 - [x] **Phase 1** — menu-bar shell. `NSStatusItem` (custom-rendered SwiftUI view, red pill background while recording), Settings scene with three tabs (General, Model, Dictionary).
 - [x] **Phase 2** — hotkey + audio capture. `KeyboardShortcuts` SPM, default ⌥Space toggle, `AVAudioEngine` records native-rate `.caf` to the sandbox's tmp dir.
 - [ ] **Phase 3a** — transcription wired. `Transcription/{Transcriber,AudioLoader,ModelLocator}.swift` are written; on stop the controller resamples → calls whisper → logs `Transcript: …`. Audio file is auto-deleted after.
-  - Pending: apply the Xcode setup from § *Initial Xcode project setup* and § *Building from source*, then drop a model `.bin` into `~/Library/Containers/com.bartoszadamczyk.Vox/Data/Library/Application Support/whisper-macos/models/` (the app prints this exact path to the Xcode console if no model is found). End-to-end test: tap ⌥Space, speak, tap, see the transcript in the console.
+  - Pending: apply the Xcode setup from § *Initial Xcode project setup* and § *Building from source*, then drop a model `.bin` into `~/Library/Containers/com.bartoszadamczyk.Vox/Data/Library/Application Support/vox-macos/models/` (the app prints this exact path to the Xcode console if no model is found). End-to-end test: tap ⌥Space, speak, tap, see the transcript in the console.
 - [ ] **Phase 3b** — model picker UI. Settings → Model tab lists available + downloadable models, downloads from Hugging Face on demand, persists the selected model in `UserDefaults`.
 - [ ] **Phase 4** — paste pipeline. Save current pasteboard, write transcript, synthesise ⌘V via `CGEvent`, restore previous pasteboard after ~150 ms. Handle Accessibility permission prompt on first use.
 - [ ] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` (Settings → Dictionary tab), paragraph splitting from silence gaps (~1.5 s threshold) detected on the recorded buffer.

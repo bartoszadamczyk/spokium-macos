@@ -57,12 +57,14 @@ struct WhisperModel: Identifiable, Equatable {
 final class ModelManager {
     private(set) var downloads: [String: Double] = [:]
     private(set) var downloadedNames: Set<String>
+    private(set) var lastDownloadError: String?
     var selectedModelName: String {
         didSet { UserDefaults.standard.set(selectedModelName, forKey: "selectedModel") }
     }
 
     private let logger = Logger(subsystem: "com.bartoszadamczyk.Vox", category: "ModelManager")
     private var activeTasks: [String: Task<Void, Never>] = [:]
+    private var activeDownloadTasks: [String: URLSessionDownloadTask] = [:]
 
     init() {
         let onDisk = Set(
@@ -83,6 +85,10 @@ final class ModelManager {
         return ModelLocator.defaultModel()
     }
 
+    func dismissDownloadError() {
+        lastDownloadError = nil
+    }
+
     func download(_ model: WhisperModel) {
         guard activeTasks[model.name] == nil else { return }
         activeTasks[model.name] = Task {
@@ -92,6 +98,8 @@ final class ModelManager {
     }
 
     func cancelDownload(_ model: WhisperModel) {
+        activeDownloadTasks[model.name]?.cancel()
+        activeDownloadTasks[model.name] = nil
         activeTasks[model.name]?.cancel()
         activeTasks[model.name] = nil
         downloads[model.name] = nil
@@ -118,20 +126,37 @@ final class ModelManager {
 
         do {
             let tempURL: URL = try await withCheckedThrowingContinuation { continuation in
-                let task = URLSession.shared.downloadTask(with: model.downloadURL) { url, _, error in
+                let task = URLSession.shared.downloadTask(with: model.downloadURL) { url, response, error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else if let url {
-                        let tmp = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(UUID().uuidString + ".bin")
-                        do {
-                            try FileManager.default.moveItem(at: url, to: tmp)
-                            continuation.resume(returning: tmp)
-                        } catch {
-                            continuation.resume(throwing: error)
-                        }
+                        return
+                    }
+
+                    if let httpResponse = response as? HTTPURLResponse,
+                       !(200...299).contains(httpResponse.statusCode) {
+                        continuation.resume(throwing: URLError(
+                            .badServerResponse,
+                            userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"]
+                        ))
+                        return
+                    }
+
+                    guard let url else {
+                        continuation.resume(throwing: URLError(.cannotCreateFile))
+                        return
+                    }
+
+                    let tmp = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString + ".bin")
+                    do {
+                        try FileManager.default.moveItem(at: url, to: tmp)
+                        continuation.resume(returning: tmp)
+                    } catch {
+                        continuation.resume(throwing: error)
                     }
                 }
+
+                self.activeDownloadTasks[model.name] = task
 
                 let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
                     Task { @MainActor [weak self] in
@@ -141,6 +166,23 @@ final class ModelManager {
                 objc_setAssociatedObject(task, "obs", observation, .OBJC_ASSOCIATION_RETAIN)
 
                 task.resume()
+            }
+
+            activeDownloadTasks[model.name] = nil
+
+            if Task.isCancelled {
+                try? FileManager.default.removeItem(at: tempURL)
+                throw CancellationError()
+            }
+
+            let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+            let fileSize = attrs[.size] as? Int64 ?? 0
+            if fileSize < 1_000_000 {
+                try? FileManager.default.removeItem(at: tempURL)
+                throw URLError(
+                    .dataLengthExceedsMaximum,
+                    userInfo: [NSLocalizedDescriptionKey: "Downloaded file too small (\(fileSize) bytes) — likely not a valid model"]
+                )
             }
 
             if FileManager.default.fileExists(atPath: model.localURL.path) {
@@ -157,8 +199,14 @@ final class ModelManager {
             }
         } catch is CancellationError {
             downloads[model.name] = nil
+            activeDownloadTasks[model.name] = nil
+        } catch let error as URLError where error.code == .cancelled {
+            downloads[model.name] = nil
+            activeDownloadTasks[model.name] = nil
         } catch {
             downloads[model.name] = nil
+            activeDownloadTasks[model.name] = nil
+            lastDownloadError = "\(model.displayName): \(error.localizedDescription)"
             logger.error("Download failed for \(model.name): \(error.localizedDescription)")
         }
     }

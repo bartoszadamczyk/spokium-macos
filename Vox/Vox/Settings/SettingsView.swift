@@ -1,5 +1,6 @@
 import KeyboardShortcuts
 import SwiftUI
+import whisper
 
 struct SettingsView: View {
     var body: some View {
@@ -16,18 +17,73 @@ struct SettingsView: View {
 }
 
 private struct GeneralTab: View {
+    @AppStorage("selectedLanguage") private var selectedLanguage = "auto"
+    @AppStorage("paragraphSplitting") private var paragraphSplitting = true
+    @AppStorage("silenceThreshold") private var silenceThreshold = 1.5
+
     var body: some View {
         Form {
             Section("Hotkey") {
                 KeyboardShortcuts.Recorder("Toggle recording:", name: .toggleRecording)
+            }
+            Section("Language") {
+                Picker("Language:", selection: $selectedLanguage) {
+                    Text("Auto-detect").tag("auto")
+                    Divider()
+                    ForEach(WhisperLanguage.all) { lang in
+                        Text(lang.displayName).tag(lang.code)
+                    }
+                }
+            }
+            Section("Paragraphs") {
+                Toggle("Split on silence gaps", isOn: $paragraphSplitting)
+                if paragraphSplitting {
+                    HStack {
+                        Text("Silence threshold:")
+                        Slider(value: $silenceThreshold, in: 0.5...5.0, step: 0.5)
+                        Text("\(silenceThreshold, specifier: "%.1f")s")
+                            .monospacedDigit()
+                            .frame(width: 30, alignment: .trailing)
+                    }
+                }
             }
         }
         .formStyle(.grouped)
     }
 }
 
+struct WhisperLanguage: Identifiable {
+    let code: String
+    let displayName: String
+    var id: String { code }
+
+    static let all: [WhisperLanguage] = {
+        let maxId = whisper_lang_max_id()
+        var langs: [WhisperLanguage] = []
+        for i in 0...maxId {
+            if let cCode = whisper_lang_str(Int32(i)),
+               let cName = whisper_lang_str_full(Int32(i)) {
+                let code = String(cString: cCode)
+                let name = String(cString: cName)
+                langs.append(WhisperLanguage(
+                    code: code,
+                    displayName: name.prefix(1).uppercased() + name.dropFirst()
+                ))
+            }
+        }
+        return langs
+    }()
+}
+
 private struct ModelTab: View {
     @State private var modelManager = ModelManager()
+
+    private var showError: Binding<Bool> {
+        Binding(
+            get: { modelManager.lastDownloadError != nil },
+            set: { if !$0 { modelManager.dismissDownloadError() } }
+        )
+    }
 
     var body: some View {
         List {
@@ -36,6 +92,11 @@ private struct ModelTab: View {
             }
         }
         .listStyle(.inset)
+        .alert("Download Failed", isPresented: showError) {
+            Button("OK") { modelManager.dismissDownloadError() }
+        } message: {
+            Text(modelManager.lastDownloadError ?? "")
+        }
     }
 }
 
@@ -102,11 +163,17 @@ private struct ModelRow: View {
 }
 
 private struct DictionaryTab: View {
+    @AppStorage("dictionaryEntries") private var entriesText = ""
+
     var body: some View {
-        ContentUnavailableView(
-            "Dictionary",
-            systemImage: "text.book.closed",
-            description: Text("Custom names and spellings to bias recognition")
-        )
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Custom names and spellings to bias recognition. One entry per line.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            TextEditor(text: $entriesText)
+                .font(.body.monospaced())
+                .scrollContentBackground(.visible)
+        }
+        .padding()
     }
 }
