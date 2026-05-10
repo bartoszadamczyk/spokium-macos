@@ -1,4 +1,5 @@
 import KeyboardShortcuts
+import ServiceManagement
 import SwiftUI
 import whisper
 
@@ -7,6 +8,8 @@ struct SettingsView: View {
         TabView {
             GeneralTab()
                 .tabItem { Label("General", systemImage: "gearshape") }
+            TranscriptionTab()
+                .tabItem { Label("Transcription", systemImage: "waveform") }
             ModelTab()
                 .tabItem { Label("Model", systemImage: "cpu") }
             DictionaryTab()
@@ -17,6 +20,33 @@ struct SettingsView: View {
 }
 
 private struct GeneralTab: View {
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    var body: some View {
+        Form {
+            Section("Hotkey") {
+                KeyboardShortcuts.Recorder("Toggle recording:", name: .toggleRecording)
+            }
+            Section("Startup") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        do {
+                            if newValue {
+                                try SMAppService.mainApp.register()
+                            } else {
+                                try SMAppService.mainApp.unregister()
+                            }
+                        } catch {
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                        }
+                    }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct TranscriptionTab: View {
     @AppStorage("selectedLanguage") private var selectedLanguage = "auto"
     @AppStorage("paragraphSplitting") private var paragraphSplitting = true
     @AppStorage("silenceThreshold") private var silenceThreshold = 1.5
@@ -25,9 +55,6 @@ private struct GeneralTab: View {
 
     var body: some View {
         Form {
-            Section("Hotkey") {
-                KeyboardShortcuts.Recorder("Toggle recording:", name: .toggleRecording)
-            }
             Section("Language") {
                 Picker("Language:", selection: $selectedLanguage) {
                     Text("Auto-detect").tag("auto")
@@ -186,6 +213,22 @@ private struct ModelRow: View {
 
 private struct DictionaryTab: View {
     @AppStorage("dictionaryEntries") private var entriesText = ""
+    @Environment(RecordingController.self) private var controller
+    @State private var tokenCount: Int?
+
+    private var prompt: String? {
+        let entries = entriesText.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !entries.isEmpty else { return nil }
+        return entries.joined(separator: ", ")
+    }
+
+    private var entryCount: Int {
+        entriesText.components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .count
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -195,8 +238,32 @@ private struct DictionaryTab: View {
             TextEditor(text: $entriesText)
                 .font(.body.monospaced())
                 .scrollContentBackground(.visible)
+            HStack {
+                if let tokenCount, prompt != nil {
+                    Text("\(entryCount) \(entryCount == 1 ? "entry" : "entries") · \(tokenCount) / 224 tokens")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(entryCount) \(entryCount == 1 ? "entry" : "entries")")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let tokenCount, tokenCount > 200 {
+                    Text("Approaching token limit — entries may be truncated")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
         .padding()
+        .task(id: prompt) {
+            guard let prompt else {
+                tokenCount = nil
+                return
+            }
+            tokenCount = await controller.countDictionaryTokens(prompt)
+        }
     }
 }
 

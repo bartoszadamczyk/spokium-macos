@@ -84,13 +84,22 @@ actor Transcriber {
 
         let text: String
         if settings.paragraphSplitting {
-            let thresholdCs = Int64(settings.silenceThreshold * 100)
-            text = buildTextWithParagraphs(ctx: ctx, thresholdCs: thresholdCs)
+            let silenceBreaks = detectSilenceBreaks(
+                samples: samples,
+                sampleRate: 16000,
+                minSilenceDuration: settings.silenceThreshold
+            )
+            text = buildTextWithParagraphs(ctx: ctx, silenceBreaks: silenceBreaks)
         } else {
             text = buildPlainText(ctx: ctx)
         }
 
         return TranscriptionResult(text: text, language: language)
+    }
+
+    func tokenCount(for text: String) throws -> Int {
+        let ctx = try loadedContext()
+        return Int(whisper_token_count(ctx, text))
     }
 
     func unload() {
@@ -108,33 +117,79 @@ actor Transcriber {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func buildTextWithParagraphs(ctx: OpaquePointer, thresholdCs: Int64) -> String {
+    private func detectSilenceBreaks(
+        samples: [Float],
+        sampleRate: Int,
+        minSilenceDuration: Double,
+        rmsThreshold: Float = 0.01
+    ) -> [Double] {
+        let windowSize = sampleRate / 20 // 50ms windows
+        let minSilenceWindows = Int(minSilenceDuration * 20)
+        var breaks: [Double] = []
+        var silenceStart: Int?
+
+        for windowIndex in 0..<(samples.count / windowSize) {
+            let offset = windowIndex * windowSize
+            let end = min(offset + windowSize, samples.count)
+            var sumSq: Float = 0
+            for i in offset..<end {
+                sumSq += samples[i] * samples[i]
+            }
+            let rms = (sumSq / Float(end - offset)).squareRoot()
+
+            if rms < rmsThreshold {
+                if silenceStart == nil { silenceStart = windowIndex }
+            } else {
+                if let start = silenceStart {
+                    let duration = windowIndex - start
+                    if duration >= minSilenceWindows {
+                        let midWindow = start + duration / 2
+                        let timeSeconds = Double(midWindow * windowSize) / Double(sampleRate)
+                        breaks.append(timeSeconds)
+                    }
+                    silenceStart = nil
+                }
+            }
+        }
+        return breaks
+    }
+
+    private func buildTextWithParagraphs(ctx: OpaquePointer, silenceBreaks: [Double]) -> String {
         let n = whisper_full_n_segments(ctx)
         guard n > 0 else { return "" }
 
         var result = ""
-        var previousEnd: Int64 = 0
 
         for i in 0..<n {
-            let t0 = whisper_full_get_segment_t0(ctx, i)
+            if i > 0 {
+                let prevEnd = Double(whisper_full_get_segment_t1(ctx, i - 1)) / 100.0
+                let curStart = Double(whisper_full_get_segment_t0(ctx, i)) / 100.0
 
-            if i > 0 && (t0 - previousEnd) >= thresholdCs {
-                result = result.trimmingCharacters(in: .whitespaces)
-                result += "\n\n"
+                let hasSilenceBreak = silenceBreaks.contains { breakTime in
+                    breakTime >= prevEnd - 0.5 && breakTime <= curStart + 0.5
+                }
+
+                if hasSilenceBreak {
+                    result = result.trimmingCharacters(in: .whitespaces)
+                    result += "\n\n"
+                }
             }
 
             if let cString = whisper_full_get_segment_text(ctx, i) {
                 result += String(cString: cString)
             }
-
-            previousEnd = whisper_full_get_segment_t1(ctx, i)
         }
 
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static let suppressLogs: Void = {
+        whisper_log_set({ _, _, _ in }, nil)
+    }()
+
     private func loadedContext() throws -> OpaquePointer {
         if let context { return context.pointer }
+        _ = Self.suppressLogs
 
         var params = whisper_context_default_params()
         params.use_gpu = true

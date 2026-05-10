@@ -40,6 +40,17 @@ final class RecordingController {
         lastError = nil
     }
 
+    func countDictionaryTokens(_ text: String) async -> Int? {
+        let manager = ModelManager()
+        guard let modelURL = manager.selectedModelURL else { return nil }
+        if transcriber?.modelURL != modelURL {
+            transcriber = nil
+        }
+        let transcriber = self.transcriber ?? Transcriber(modelURL: modelURL)
+        self.transcriber = transcriber
+        return try? await transcriber.tokenCount(for: text)
+    }
+
     func toggle() {
         switch state {
         case .idle:
