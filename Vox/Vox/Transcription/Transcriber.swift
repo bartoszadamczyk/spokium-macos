@@ -194,6 +194,13 @@ actor Transcriber {
         var params = whisper_context_default_params()
         params.use_gpu = true
 
+        if let ctx = whisper_init_from_file_with_params(modelURL.path, params) {
+            let wrapped = WhisperContext(pointer: ctx)
+            context = wrapped
+            return ctx
+        }
+
+        params.use_gpu = false
         guard let ctx = whisper_init_from_file_with_params(modelURL.path, params) else {
             throw TranscriberError.modelLoadFailed
         }

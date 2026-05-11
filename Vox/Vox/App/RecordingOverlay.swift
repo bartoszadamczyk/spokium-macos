@@ -14,7 +14,9 @@ final class RecordingOverlay {
     func show(mode: OverlayMode) {
         if let hostingView {
             hostingView.rootView = OverlayContentView(mode: mode)
-            reposition()
+            DispatchQueue.main.async { [weak self] in
+                self?.reposition()
+            }
             return
         }
 

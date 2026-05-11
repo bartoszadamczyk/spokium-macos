@@ -10,6 +10,8 @@ enum RecordingState: Equatable {
 
 enum RecordingError: Equatable {
     case noModel
+    case microphoneDenied
+    case recordingFailed(String)
     case transcriptionFailed(String)
     case downloadFailed(String)
     case noAccessibility
@@ -24,6 +26,8 @@ final class RecordingController {
     private let recorder = AudioRecorder()
     private let logger = Logger(subsystem: "com.bartoszadamczyk.Vox", category: "Recording")
     private var transcriber: Transcriber?
+    private var recordingStartedAt: ContinuousClock.Instant?
+    private var transcriptionTask: Task<Void, Never>?
 
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleRecording) { [weak self] in
@@ -32,6 +36,8 @@ final class RecordingController {
     }
 
     func cleanup() async {
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
         await transcriber?.unload()
         transcriber = nil
     }
@@ -72,25 +78,32 @@ final class RecordingController {
         let url = makeTempURL()
         do {
             try await recorder.start(to: url)
+            recordingStartedAt = .now
             state = .recording
             logger.info("Recording started")
+        } catch AudioRecorderError.microphoneDenied {
+            try? FileManager.default.removeItem(at: url)
+            lastError = .microphoneDenied
         } catch {
             try? FileManager.default.removeItem(at: url)
             logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
+            lastError = .recordingFailed(error.localizedDescription)
         }
     }
 
     private func stop() {
         state = .finishing
         guard let url = recorder.stop() else {
+            lastError = .recordingFailed("Audio recording failed to save.")
             state = .idle
             return
         }
 
-        Task {
+        transcriptionTask = Task {
             defer {
                 try? FileManager.default.removeItem(at: url)
                 state = .idle
+                transcriptionTask = nil
             }
             await transcribe(url: url)
         }
@@ -109,11 +122,16 @@ final class RecordingController {
         let transcriber = self.transcriber ?? Transcriber(modelURL: modelURL)
         self.transcriber = transcriber
 
+        let recordingDuration = recordingStartedAt.map { ContinuousClock.now - $0 } ?? .zero
+
         do {
             let prompt = dictionaryPrompt()
             let settings = transcriptionSettings()
+            let transcriptionStart = ContinuousClock.now
             let result = try await transcriber.transcribe(audioURL: url, initialPrompt: prompt, settings: settings)
-            logger.info("Transcribed: language=\(result.language, privacy: .public), chars=\(result.text.count)")
+            let transcriptionDuration = ContinuousClock.now - transcriptionStart
+            let modelName = modelURL.deletingPathExtension().lastPathComponent
+            logger.info("Transcribed: model=\(modelName, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public)")
 
             guard !result.text.isEmpty else { return }
             let pasted = await Paster.paste(result.text)

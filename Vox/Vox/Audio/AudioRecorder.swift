@@ -1,14 +1,22 @@
 import AVFoundation
+import OSLog
 
 enum AudioRecorderError: Error {
     case microphoneDenied
     case alreadyRunning
+    case writeFailed
+}
+
+private final class WriteErrorFlag: @unchecked Sendable {
+    nonisolated(unsafe) var failed = false
 }
 
 @MainActor
 final class AudioRecorder {
     private let engine = AVAudioEngine()
     private var outputFile: AVAudioFile?
+    private let writeErrorFlag = WriteErrorFlag()
+    private let logger = Logger(subsystem: "com.bartoszadamczyk.Vox", category: "AudioRecorder")
 
     var isRunning: Bool { engine.isRunning }
 
@@ -23,9 +31,15 @@ final class AudioRecorder {
 
         let file = try AVAudioFile(forWriting: fileURL, settings: format.settings)
         outputFile = file
+        writeErrorFlag.failed = false
 
+        let flag = writeErrorFlag
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: format) { @Sendable buffer, _ in
-            try? file.write(from: buffer)
+            do {
+                try file.write(from: buffer)
+            } catch {
+                flag.failed = true
+            }
         }
 
         try engine.start()
@@ -37,6 +51,10 @@ final class AudioRecorder {
         engine.stop()
         let url = outputFile?.url
         outputFile = nil
+        if writeErrorFlag.failed {
+            logger.error("Audio write errors occurred during recording")
+            return nil
+        }
         return url
     }
 }

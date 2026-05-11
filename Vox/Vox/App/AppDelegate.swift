@@ -37,10 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             name: NSWindow.willCloseNotification,
             object: nil
         )
-
-        if !Paster.hasAccessibilityPermission() {
-            Paster.requestAccessibilityPermission()
-        }
     }
 
     @objc private func windowDidClose(_ notification: Notification) {
@@ -205,6 +201,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if alert.runModal() == .alertFirstButtonReturn {
                 openSettings()
             }
+        case .microphoneDenied:
+            alert.messageText = "Microphone Access Required"
+            alert.informativeText = "Vox needs microphone access to record audio. Grant permission in System Settings → Privacy & Security → Microphone."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        case .recordingFailed(let detail):
+            alert.messageText = "Recording Failed"
+            alert.informativeText = detail
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         case .transcriptionFailed(let detail):
             alert.messageText = "Transcription Failed"
             alert.informativeText = detail
@@ -235,10 +241,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettings() {
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
         settingsScene.environment.openSettings()
+        NSApp.activate()
 
         DispatchQueue.main.async {
+            NSApp.activate()
             for window in NSApp.windows where window.canBecomeMain {
                 window.makeKeyAndOrderFront(nil)
             }
