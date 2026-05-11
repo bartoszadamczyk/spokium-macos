@@ -69,3 +69,6 @@ fastlane/test_output
 
 #JetBrains
 .idea
+
+# Builds
+dist/

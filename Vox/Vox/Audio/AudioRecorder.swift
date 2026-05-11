@@ -1,4 +1,5 @@
-import AVFoundation
+@preconcurrency import AVFoundation
+import AudioToolbox
 import OSLog
 
 enum AudioRecorderError: Error {
@@ -27,6 +28,20 @@ final class AudioRecorder {
         guard granted else { throw AudioRecorderError.microphoneDenied }
 
         let inputNode = engine.inputNode
+        if let uid = UserDefaults.standard.string(forKey: "selectedInputDevice"),
+           !uid.isEmpty,
+           let device = AudioInputDevice.available().first(where: { $0.uid == uid }),
+           let audioUnit = inputNode.audioUnit {
+            var deviceID = device.deviceID
+            AudioUnitSetProperty(
+                audioUnit,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &deviceID,
+                UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+        }
         let format = inputNode.inputFormat(forBus: 0)
 
         let file = try AVAudioFile(forWriting: fileURL, settings: format.settings)

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleMenuItem: NSMenuItem!
+    private var inputDeviceMenu: NSMenu!
     private let recordingOverlay = RecordingOverlay()
     private var pulseTimer: Timer?
     private var pulseOn = true
@@ -67,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleMenuItem.target = self
         applyShortcutToMenuItem()
         menu.addItem(toggleMenuItem)
+
+        inputDeviceMenu = NSMenu()
+        let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
+        inputDeviceItem.submenu = inputDeviceMenu
+        menu.addItem(inputDeviceItem)
 
         menu.addItem(.separator())
 
@@ -157,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         applyShortcutToMenuItem()
+        refreshInputDeviceMenu()
     }
 
     @objc private func toggleRecording() {
@@ -237,6 +244,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for file in files where file.lastPathComponent.hasPrefix("whisper-") && file.pathExtension == "caf" {
             try? FileManager.default.removeItem(at: file)
         }
+    }
+
+    private func refreshInputDeviceMenu() {
+        inputDeviceMenu.removeAllItems()
+        let selectedUID = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
+
+        let defaultName = AudioInputDevice.defaultInputName() ?? "Unknown"
+        let defaultItem = NSMenuItem(title: "System Default (\(defaultName))", action: #selector(selectInputDevice(_:)), keyEquivalent: "")
+        defaultItem.target = self
+        defaultItem.representedObject = "" as String
+        defaultItem.state = selectedUID.isEmpty ? .on : .off
+        inputDeviceMenu.addItem(defaultItem)
+
+        let devices = AudioInputDevice.available()
+        if !devices.isEmpty {
+            inputDeviceMenu.addItem(.separator())
+        }
+        for device in devices {
+            let item = NSMenuItem(title: device.name, action: #selector(selectInputDevice(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = device.uid
+            item.state = device.uid == selectedUID ? .on : .off
+            inputDeviceMenu.addItem(item)
+        }
+    }
+    
+    @objc private func selectInputDevice(_ sender: NSMenuItem) {
+        let uid = sender.representedObject as? String ?? ""
+        UserDefaults.standard.set(uid, forKey: "selectedInputDevice")
     }
 
     @objc private func openSettings() {
