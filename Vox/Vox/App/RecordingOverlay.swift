@@ -72,6 +72,7 @@ final class RecordingOverlay {
 
 private struct OverlayContentView: View {
     let mode: OverlayMode
+    @State private var pulse = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -80,6 +81,7 @@ private struct OverlayContentView: View {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.red)
+                    .opacity(pulse ? 0.45 : 1.0)
                 Text("Recording")
                     .font(.system(size: 18, weight: .medium))
             case .transcribing:
@@ -93,5 +95,10 @@ private struct OverlayContentView: View {
         .padding(.vertical, 16)
         .fixedSize()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
     }
 }
