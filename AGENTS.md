@@ -14,7 +14,7 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 - **Sandboxed.** The app runs under App Sandbox. Accessibility-driven ⌘V, global hotkeys, and microphone all work in sandbox once the user grants the relevant permissions.
 - **IDE:** Xcode. The project is an Xcode app target, not a SwiftPM executable, because we need an `.app` bundle, `Info.plist`, entitlements, and a menu-bar `LSUIElement` flag.
 - **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via a locally-built XCFramework. The user clones `whisper.cpp` next to this repo, runs `./build-xcframework.sh`, and copies the resulting `whisper.xcframework` into `Vox/Frameworks/`. The framework is gitignored. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Vox`, so no collision. Models downloaded at runtime, not bundled.
-- **Global hotkey:** [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) SPM package (v2.4.0+). Wraps Carbon `RegisterEventHotKey` and gives us a SwiftUI recorder view for the settings screen. Default: ⌥Space.
+- **Global hotkey:** [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) SPM package (v2.4.0+). Wraps Carbon `RegisterEventHotKey` and gives us a SwiftUI recorder view for the settings screen. Default: ⌥Space. Supports toggle mode (default) or push-to-record (`onKeyDown` starts, `onKeyUp` stops) via `pushToRecord` UserDefaults flag.
 - **Audio capture:** `AVAudioEngine` with input node tap, writing native-rate CAF to temp directory. Supports user-selectable input device via CoreAudio `AudioUnitSetProperty` (stored as device UID in UserDefaults). Resampled to 16 kHz mono Float32 by `AudioLoader` before transcription.
 - **Paste mechanism:** write to `NSPasteboard.general`, synthesize ⌘V via `CGEvent` (key code 9), optionally restore previous pasteboard contents after 150ms delay. Both auto-paste and clipboard restore are user-configurable.
 - **Concurrency:** `actor` for `Transcriber` (whisper context isolation), `@Observable` for UI state (`RecordingController`, `ModelManager`). No Combine — uses Swift async/await throughout.
@@ -44,7 +44,8 @@ Things that do **not** need an entitlement:
 
 - **Hotkey** — toggle style. Tap to start recording, tap again to stop and transcribe.
 - **Paragraph splitting** — RMS-based silence detection on the recorded audio samples (50ms windows, configurable threshold). Silence gaps above the threshold insert paragraph breaks between whisper segments.
-- **Custom dictionary** — bias via whisper's `initial_prompt` only. User-entered names/spellings are joined into the prompt before each transcription. No post-processing find/replace in v1.
+- **Custom dictionary** — bias via whisper's `initial_prompt`. User-entered names/spellings are joined into the prompt before each transcription. Token count is shown live using `whisper_token_count` against the loaded model.
+- **Snippets** — post-transcription find/replace. JSON-encoded `[Snippet]` (id, trigger, replacement) stored in UserDefaults. Applied after whisper output, before paste. Case-insensitive, whole-word regex match (`\b…\b`).
 - **Model storage** — no bundled model. Models live at `~/Library/Application Support/vox-macos/models/` (resolved via `FileManager` APIs). Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo, `ggml-*.bin` files) and validated with GGML magic bytes and SHA-1 checksums before acceptance. Settings → Model tab shows a list with sizes + quality notes. A "Show in Finder" button lets users manage models manually.
 - **Model validation** — downloads are checked for HTTP 2xx status, GGML format magic bytes (ggml/ggmf/ggjt), and SHA-1 checksum match against known hashes.
 - **Distribution** — GitHub Releases, signed with Developer ID and notarized via Apple. Hardened Runtime enabled.
@@ -72,7 +73,8 @@ vox-macos/
         ├── Hotkey/                 # HotkeyName (KeyboardShortcuts.Name extension)
         ├── Paste/                  # Paster (pasteboard + CGEvent ⌘V simulation)
         ├── Settings/               # ModelManager (download/validate/select models),
-        │                           #   SettingsView (General, Transcription, Model, Dictionary tabs)
+        │                           #   SettingsView (General, Transcription, Model, Dictionary, Snippets tabs),
+        │                           #   Snippets (find/replace post-processing)
         └── Assets.xcassets
 ```
 
@@ -85,7 +87,13 @@ vox-macos/
 Wraps whisper.cpp C API. Lazy-loads model context with GPU enabled (falls back to CPU if GPU init fails). Caches context across transcriptions (unloaded on app quit via `applicationShouldTerminate` → `.terminateLater` pattern). Whisper logs are suppressed via `whisper_log_set` no-op callback. Also exposes `tokenCount(for:)` for dictionary token budget display.
 
 ### Audio input device selection
-Menu bar dropdown includes an "Input Device" submenu listing available physical devices via CoreAudio (`AudioObjectGetPropertyData`). Aggregate and hidden devices are filtered out. Selected device UID is stored in UserDefaults; applied via `AudioUnitSetProperty` on the engine's input node before recording starts. "System Default" shows the current default device name.
+Menu bar dropdown includes an "Input Device" submenu listing available physical devices via CoreAudio (`AudioObjectGetPropertyData`). Aggregate and hidden devices are filtered out. Selected device UID is stored in UserDefaults; applied via `AudioUnitSetProperty` on the engine's input node before recording starts. "System Default" shows the current default device name. Settings → General has the same picker (they share the same UserDefaults key).
+
+### Model selection in menu bar
+Dropdown also includes a "Model" submenu listing downloaded models with the current selection checkmarked, plus a "Manage Models…" item that opens Settings. Updating the selection writes to the same `selectedModel` UserDefaults key the Settings UI uses.
+
+### Snippets pipeline
+After `Transcriber.transcribe(...)` returns text, `RecordingController.transcribe` runs `SnippetStore.apply(to:)` before sending to `Paster`. Each snippet's trigger is escaped (`NSRegularExpression.escapedPattern`) and wrapped in `\b…\b` boundaries; matches are replaced with the user's replacement string (also escaped via `escapedTemplate`).
 
 ### Model downloads
 Uses `URLSessionDownloadTask` with KVO on `progress.fractionCompleted`. The actual download task is stored so cancellation works (not just the wrapping Swift Task). After download: validates HTTP status, checks GGML magic bytes, computes streaming SHA-1 (1MB chunks via CommonCrypto), then moves to final location atomically.
@@ -129,7 +137,9 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. Switches ap
 | `preserveClipboard` | Bool | `true` | TranscriptionTab, Paster |
 | `dictionaryEntries` | String | `""` | DictionaryTab, RecordingController |
 | `selectedModel` | String | (auto) | ModelManager |
-| `selectedInputDevice` | String | `""` | AppDelegate menu, AudioRecorder |
+| `selectedInputDevice` | String | `""` | AppDelegate menu, AudioRecorder, GeneralTab |
+| `pushToRecord` | Bool | `false` | GeneralTab, RecordingController |
+| `snippets` | Data | `[]` (JSON) | SnippetsTab, SnippetStore (applied in RecordingController) |
 
 ## Out of scope (do not build)
 

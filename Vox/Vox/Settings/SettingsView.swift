@@ -14,6 +14,8 @@ struct SettingsView: View {
                 .tabItem { Label("Model", systemImage: "cpu") }
             DictionaryTab()
                 .tabItem { Label("Dictionary", systemImage: "text.book.closed") }
+            SnippetsTab()
+                .tabItem { Label("Snippets", systemImage: "text.append") }
         }
         .frame(width: 600, height: 400)
     }
@@ -22,13 +24,15 @@ struct SettingsView: View {
 private struct GeneralTab: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
+    @AppStorage("pushToRecord") private var pushToRecord = false
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
     var body: some View {
         Form {
             Section("Hotkey") {
-                KeyboardShortcuts.Recorder("Toggle recording:", name: .toggleRecording)
+                KeyboardShortcuts.Recorder("Shortcut:", name: .toggleRecording)
+                Toggle("Push to record (hold shortcut while speaking)", isOn: $pushToRecord)
             }
             Section("Audio Input") {
                 Picker("Input device:", selection: $selectedInputDevice) {
@@ -281,6 +285,53 @@ private struct DictionaryTab: View {
                 return
             }
             tokenCount = await controller.countDictionaryTokens(prompt)
+        }
+    }
+}
+
+private struct SnippetsTab: View {
+    @State private var snippets: [Snippet] = SnippetStore.load()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Replace spoken phrases with text. Matches whole words case-insensitively.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            List {
+                ForEach($snippets) { $snippet in
+                    HStack(spacing: 8) {
+                        TextField("Trigger", text: $snippet.trigger)
+                            .textFieldStyle(.roundedBorder)
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(.secondary)
+                        TextField("Replacement", text: $snippet.replacement)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            snippets.removeAll { $0.id == snippet.id }
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .listStyle(.inset)
+
+            HStack {
+                Button("Add Snippet") {
+                    snippets.append(Snippet())
+                }
+                Spacer()
+                Text("\(snippets.count) \(snippets.count == 1 ? "snippet" : "snippets")")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .onChange(of: snippets) { _, newValue in
+            SnippetStore.save(newValue)
         }
     }
 }

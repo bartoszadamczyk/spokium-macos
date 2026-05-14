@@ -31,7 +31,31 @@ final class RecordingController {
 
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleRecording) { [weak self] in
-            self?.toggle()
+            self?.handleKeyDown()
+        }
+        KeyboardShortcuts.onKeyUp(for: .toggleRecording) { [weak self] in
+            self?.handleKeyUp()
+        }
+    }
+
+    private var isPushToRecord: Bool {
+        UserDefaults.standard.bool(forKey: "pushToRecord")
+    }
+
+    private func handleKeyDown() {
+        if isPushToRecord {
+            if case .idle = state {
+                Task { await start() }
+            }
+        } else {
+            toggle()
+        }
+    }
+
+    private func handleKeyUp() {
+        guard isPushToRecord else { return }
+        if case .recording = state {
+            stop()
         }
     }
 
@@ -133,8 +157,9 @@ final class RecordingController {
             let modelName = modelURL.deletingPathExtension().lastPathComponent
             logger.info("Transcribed: model=\(modelName, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public)")
 
-            guard !result.text.isEmpty else { return }
-            let pasted = await Paster.paste(result.text)
+            let finalText = SnippetStore.apply(to: result.text)
+            guard !finalText.isEmpty else { return }
+            let pasted = await Paster.paste(finalText)
             if !pasted {
                 lastError = .noAccessibility
                 Paster.requestAccessibilityPermission()

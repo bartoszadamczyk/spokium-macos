@@ -6,10 +6,11 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 
 - **Native, lightweight.** Single Swift app, no Electron, no background daemon zoo.
 - **Lives in the menu bar.** No dock icon. The status item shows idle / recording / transcribing state with a pulsing red pill indicator while recording.
-- **Global hotkey to record.** Toggle style (default ⌥Space): tap to start recording, tap again to stop, transcribe, and paste.
+- **Global hotkey to record.** Toggle style (default ⌥Space): tap to start recording, tap again to stop, transcribe, and paste. Push-to-record mode also available (hold while speaking, release to transcribe).
 - **On-device only.** All audio and transcription stays local; no network calls except model downloads.
-- **Input device picker.** Menu bar dropdown includes a submenu to select the audio input device (or use system default).
-- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey, launch at login, paragraph splitting, auto-paste, clipboard restore, and a custom dictionary with token counting.
+- **Menu bar dropdown** with quick switching for input device and active whisper model (no need to open Settings for routine changes).
+- **Snippets.** Define spoken triggers like "calendar link" that get replaced with arbitrary text on paste. Case-insensitive, whole-word matching.
+- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
 - **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 1.5s) and inserts paragraph breaks so pasted output keeps structure.
 - **Pastes into the active window.** Uses the system pasteboard + a synthesized ⌘V. Optionally restores previous clipboard contents after paste. Can also be set to clipboard-only mode (no auto-paste).
 - **No transcription history.** Nothing is saved to disk after the paste. Logs do not include transcribed content.
@@ -71,6 +72,7 @@ User-granted permissions (prompted at first use, not at install):
 - **Model storage** — no bundled model. The app downloads models on demand into `~/Library/Application Support/vox-macos/models/`. Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
 - **Download validation** — HTTP status code, GGML format magic bytes, and SHA-1 checksum verification before accepting a downloaded model.
 - **Output options** — auto-paste (default on) and clipboard restore (default on) are independently configurable. With auto-paste off, text is placed on the clipboard only.
+- **Snippets** — post-transcription find/replace. User-defined trigger phrases are matched against the transcript with case-insensitive whole-word matching, replaced before paste.
 - **Distribution** — signed with Developer ID and notarized via Apple. Published as `.zip` builds on GitHub Releases.
 
 ## Initial Xcode project setup
@@ -138,12 +140,12 @@ Xcode picks up the updated framework on next build.
 
 All core functionality is implemented and working:
 
-- [x] **Phase 1** — menu-bar shell. `NSStatusItem` with custom SwiftUI-rendered icon (red pulsing pill while recording), Settings scene with four tabs (General, Transcription, Model, Dictionary).
-- [x] **Phase 2** — hotkey + audio capture. `KeyboardShortcuts` SPM, default ⌥Space toggle, `AVAudioEngine` records native-rate `.caf` to the sandbox's tmp dir. Input device selectable from menu bar dropdown.
+- [x] **Phase 1** — menu-bar shell. `NSStatusItem` with red pulsing waveform icon while recording, Settings scene with five tabs (General, Transcription, Model, Dictionary, Snippets). Menu bar dropdown also exposes input device and model submenus.
+- [x] **Phase 2** — hotkey + audio capture. `KeyboardShortcuts` SPM, default ⌥Space, toggle or push-to-record mode, `AVAudioEngine` records native-rate `.caf` to the sandbox's tmp dir. Input device selectable from menu bar and Settings.
 - [x] **Phase 3a** — transcription wired. On stop: resample to 16kHz mono → run whisper inference → output text with language detection. Audio file auto-deleted after transcription. Whisper context cached across sessions for fast re-transcription. GPU fallback to CPU if GPU init fails.
 - [x] **Phase 3b** — model picker UI. Settings → Model tab lists 6 models (tiny through large-v3-turbo), downloads from Hugging Face with progress bar, validates with SHA-1 checksums and GGML magic bytes. "Show in Finder" button for manual model management.
 - [x] **Phase 4** — paste pipeline. Save current pasteboard, write transcript, synthesize ⌘V via `CGEvent`, optionally restore previous pasteboard after 150ms. Configurable auto-paste and clipboard restore settings.
-- [x] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` with real token counting (224 max). Paragraph splitting via RMS-based silence detection on recorded audio (configurable threshold).
+- [x] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` with real token counting (224 max). Paragraph splitting via RMS-based silence detection on recorded audio (configurable threshold). User-defined snippets find/replace after transcription.
 - [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD (recording + transcribing states), error alerts (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing), launch at login, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration.
 - [x] **Phase 7** — distribution. Signed with Developer ID, notarized via Apple, Hardened Runtime enabled.
 
@@ -159,3 +161,5 @@ All core functionality is implemented and working:
 | `dictionaryEntries` | String | `""` | Newline-separated custom names/spellings |
 | `selectedModel` | String | (auto) | Name of the selected whisper model |
 | `selectedInputDevice` | String | `""` | Audio input device UID (empty = system default) |
+| `pushToRecord` | Bool | `false` | If true, hold shortcut to record instead of toggle |
+| `snippets` | Data (JSON) | `[]` | Array of `{id, trigger, replacement}` for find/replace |
