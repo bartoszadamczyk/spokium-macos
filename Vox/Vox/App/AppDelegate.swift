@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var toggleMenuItem: NSMenuItem!
     private var inputDeviceMenu: NSMenu!
+    private var modelMenu: NSMenu!
     private let recordingOverlay = RecordingOverlay()
     private var pulseTimer: Timer?
     private var pulseOn = true
@@ -73,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
         inputDeviceItem.submenu = inputDeviceMenu
         menu.addItem(inputDeviceItem)
+
+        modelMenu = NSMenu()
+        let modelItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
+        modelItem.submenu = modelMenu
+        menu.addItem(modelItem)
 
         menu.addItem(.separator())
 
@@ -148,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.pulseOn.toggle()
                 NSAnimationContext.runAnimationGroup { ctx in
                     ctx.duration = 0.6
-                    self.statusItem.button?.animator().alphaValue = self.pulseOn ? 1.0 : 0.3
+                    self.statusItem.button?.animator().alphaValue = self.pulseOn ? 1.0 : 0.45
                 }
             }
         }
@@ -164,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         applyShortcutToMenuItem()
         refreshInputDeviceMenu()
+        refreshModelMenu()
     }
 
     @objc private func toggleRecording() {
@@ -273,6 +280,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func selectInputDevice(_ sender: NSMenuItem) {
         let uid = sender.representedObject as? String ?? ""
         UserDefaults.standard.set(uid, forKey: "selectedInputDevice")
+    }
+
+    private func refreshModelMenu() {
+        modelMenu.removeAllItems()
+        let manager = ModelManager()
+        let downloaded = WhisperModel.all.filter { manager.downloadedNames.contains($0.name) }
+
+        if downloaded.isEmpty {
+            let empty = NSMenuItem(title: "No models downloaded", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            modelMenu.addItem(empty)
+            modelMenu.addItem(.separator())
+        } else {
+            for model in downloaded {
+                let item = NSMenuItem(
+                    title: "\(model.displayName) (\(model.sizeLabel))",
+                    action: #selector(selectModel(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = model.name
+                item.state = manager.selectedModelName == model.name ? .on : .off
+                modelMenu.addItem(item)
+            }
+            modelMenu.addItem(.separator())
+        }
+
+        let manage = NSMenuItem(title: "Manage Models…", action: #selector(openSettings), keyEquivalent: "")
+        manage.target = self
+        modelMenu.addItem(manage)
+    }
+
+    @objc private func selectModel(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        let manager = ModelManager()
+        manager.selectedModelName = name
     }
 
     @objc private func openSettings() {

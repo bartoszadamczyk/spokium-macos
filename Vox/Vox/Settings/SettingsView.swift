@@ -21,11 +21,25 @@ struct SettingsView: View {
 
 private struct GeneralTab: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
+    @State private var devices: [AudioInputDevice] = []
+    @State private var defaultInputName: String = ""
 
     var body: some View {
         Form {
             Section("Hotkey") {
                 KeyboardShortcuts.Recorder("Toggle recording:", name: .toggleRecording)
+            }
+            Section("Audio Input") {
+                Picker("Input device:", selection: $selectedInputDevice) {
+                    Text(defaultInputName.isEmpty ? "System Default" : "System Default (\(defaultInputName))").tag("")
+                    if !devices.isEmpty {
+                        Divider()
+                        ForEach(devices, id: \.uid) { device in
+                            Text(device.name).tag(device.uid)
+                        }
+                    }
+                }
             }
             Section("Startup") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
@@ -43,6 +57,10 @@ private struct GeneralTab: View {
             }
         }
         .formStyle(.grouped)
+        .task {
+            devices = AudioInputDevice.available()
+            defaultInputName = AudioInputDevice.defaultInputName() ?? ""
+        }
     }
 }
 
