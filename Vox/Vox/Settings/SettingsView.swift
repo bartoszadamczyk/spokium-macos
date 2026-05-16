@@ -17,7 +17,7 @@ struct SettingsView: View {
             SnippetsTab()
                 .tabItem { Label("Snippets", systemImage: "text.append") }
         }
-        .frame(width: 600, height: 400)
+        .frame(width: 600, height: 500)
     }
 }
 
@@ -74,6 +74,7 @@ private struct TranscriptionTab: View {
     @AppStorage("silenceThreshold") private var silenceThreshold = 1.5
     @AppStorage("autoPaste") private var autoPaste = true
     @AppStorage("preserveClipboard") private var preserveClipboard = true
+    @AppStorage("maxRecordingMinutes") private var maxRecordingMinutes: Double = 10.0
 
     var body: some View {
         Form {
@@ -84,6 +85,17 @@ private struct TranscriptionTab: View {
                     ForEach(WhisperLanguage.all) { lang in
                         Text(lang.displayName).tag(lang.code)
                     }
+                }
+            }
+            Section("Recording") {
+                Picker("Auto-stop after:", selection: $maxRecordingMinutes) {
+                    Text("1 minute").tag(1.0)
+                    Text("2 minutes").tag(2.0)
+                    Text("5 minutes").tag(5.0)
+                    Text("10 minutes").tag(10.0)
+                    Text("30 minutes").tag(30.0)
+                    Divider()
+                    Text("No limit").tag(0.0)
                 }
             }
             Section("Paragraphs") {

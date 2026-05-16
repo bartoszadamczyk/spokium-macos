@@ -15,6 +15,7 @@ struct TranscriptionResult: Sendable {
 enum TranscriberError: Error {
     case modelLoadFailed
     case inferenceFailed(Int32)
+    case cancelled
 }
 
 private final class WhisperContext: @unchecked Sendable {
@@ -23,12 +24,26 @@ private final class WhisperContext: @unchecked Sendable {
     deinit { whisper_free(pointer) }
 }
 
+private final class AbortFlag: @unchecked Sendable {
+    nonisolated(unsafe) let pointer: UnsafeMutablePointer<Bool>
+    nonisolated init() {
+        pointer = UnsafeMutablePointer<Bool>.allocate(capacity: 1)
+        pointer.initialize(to: false)
+    }
+    deinit { pointer.deinitialize(count: 1); pointer.deallocate() }
+}
+
 actor Transcriber {
     let modelURL: URL
     private var context: WhisperContext?
+    nonisolated private let abortFlag = AbortFlag()
 
     init(modelURL: URL) {
         self.modelURL = modelURL
+    }
+
+    nonisolated func abort() {
+        abortFlag.pointer.pointee = true
     }
 
     func transcribe(
@@ -46,6 +61,7 @@ actor Transcriber {
         settings: TranscriptionSettings = TranscriptionSettings()
     ) throws -> TranscriptionResult {
         let ctx = try loadedContext()
+        abortFlag.pointer.pointee = false
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_realtime = false
@@ -54,6 +70,12 @@ actor Transcriber {
         params.no_context = true
         params.translate = false
         params.n_threads = Int32(min(8, ProcessInfo.processInfo.activeProcessorCount))
+
+        params.abort_callback = { userData in
+            guard let userData else { return false }
+            return userData.assumingMemoryBound(to: Bool.self).pointee
+        }
+        params.abort_callback_user_data = UnsafeMutableRawPointer(abortFlag.pointer)
 
         let langPtr: UnsafeMutablePointer<CChar>?
         if settings.language == "auto" {
@@ -71,6 +93,9 @@ actor Transcriber {
 
         let status = samples.withUnsafeBufferPointer { ptr in
             whisper_full(ctx, params, ptr.baseAddress, Int32(samples.count))
+        }
+        if abortFlag.pointer.pointee {
+            throw TranscriberError.cancelled
         }
         guard status == 0 else { throw TranscriberError.inferenceFailed(status) }
 

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleMenuItem: NSMenuItem!
+    private var cancelMenuItem: NSMenuItem!
     private var inputDeviceMenu: NSMenu!
     private var modelMenu: NSMenu!
     private let recordingOverlay = RecordingOverlay()
@@ -32,20 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyState(controller.state)
         observeState()
         observeErrors()
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidClose),
-            name: NSWindow.willCloseNotification,
-            object: nil
-        )
-    }
-
-    @objc private func windowDidClose(_ notification: Notification) {
-        let hasVisibleWindows = NSApp.windows.contains { $0.isVisible && $0 !== statusItem.button?.window }
-        if !hasVisibleWindows {
-            NSApp.setActivationPolicy(.accessory)
-        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -69,6 +56,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleMenuItem.target = self
         applyShortcutToMenuItem()
         menu.addItem(toggleMenuItem)
+
+        cancelMenuItem = NSMenuItem(
+            title: "Cancel Recording",
+            action: #selector(cancelRecording),
+            keyEquivalent: ""
+        )
+        cancelMenuItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
+        cancelMenuItem.target = self
+        cancelMenuItem.isHidden = true
+        menu.addItem(cancelMenuItem)
+
+        menu.addItem(.separator())
 
         inputDeviceMenu = NSMenu()
         let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
@@ -119,13 +118,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             systemSymbolName: recording ? "stop.fill" : "mic.fill",
             accessibilityDescription: nil
         )
+        cancelMenuItem.isHidden = state == .idle
+        cancelMenuItem.title = state == .finishing ? "Cancel Transcription" : "Cancel Recording"
 
         switch state {
         case .recording:
-            recordingOverlay.show(mode: .recording)
+            recordingOverlay.show(mode: .recording, controller: controller)
             startPulse()
         case .finishing:
-            recordingOverlay.show(mode: .transcribing)
+            recordingOverlay.show(mode: .transcribing, controller: controller)
             stopPulse()
         case .idle:
             recordingOverlay.hide()
@@ -175,6 +176,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleRecording() {
         controller.toggle()
+    }
+
+    @objc private func cancelRecording() {
+        controller.cancel()
     }
 
     private func applyShortcutToMenuItem() {
@@ -319,12 +324,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openSettings() {
-        NSApp.setActivationPolicy(.regular)
         settingsScene.environment.openSettings()
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: true)
 
         DispatchQueue.main.async {
-            NSApp.activate()
+            NSApp.activate(ignoringOtherApps: true)
             for window in NSApp.windows where window.canBecomeMain {
                 window.makeKeyAndOrderFront(nil)
             }
