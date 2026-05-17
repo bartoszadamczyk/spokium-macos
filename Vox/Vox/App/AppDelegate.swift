@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         inputDeviceMenu = NSMenu()
-        let inputDeviceItem = NSMenuItem(title: "Input", action: nil, keyEquivalent: "")
+        let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
         inputDeviceItem.submenu = inputDeviceMenu
         menu.addItem(inputDeviceItem)
 

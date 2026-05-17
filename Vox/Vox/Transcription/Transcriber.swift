@@ -131,10 +131,18 @@ actor Transcriber {
         context = nil
     }
 
-    private func buildPlainText(ctx: OpaquePointer) -> String {
+    private static let noSpeechThreshold: Float = 0.6
+
+    private func keptSegmentIndices(ctx: OpaquePointer) -> [Int32] {
         let n = whisper_full_n_segments(ctx)
+        return (0..<n).filter { i in
+            whisper_full_get_segment_no_speech_prob(ctx, i) <= Self.noSpeechThreshold
+        }
+    }
+
+    private func buildPlainText(ctx: OpaquePointer) -> String {
         var result = ""
-        for i in 0..<n {
+        for i in keptSegmentIndices(ctx: ctx) {
             if let cString = whisper_full_get_segment_text(ctx, i) {
                 result += String(cString: cString)
             }
@@ -180,14 +188,15 @@ actor Transcriber {
     }
 
     private func buildTextWithParagraphs(ctx: OpaquePointer, silenceBreaks: [Double]) -> String {
-        let n = whisper_full_n_segments(ctx)
-        guard n > 0 else { return "" }
+        let kept = keptSegmentIndices(ctx: ctx)
+        guard !kept.isEmpty else { return "" }
 
         var result = ""
 
-        for i in 0..<n {
-            if i > 0 {
-                let prevEnd = Double(whisper_full_get_segment_t1(ctx, i - 1)) / 100.0
+        for (idx, i) in kept.enumerated() {
+            if idx > 0 {
+                let prev = kept[idx - 1]
+                let prevEnd = Double(whisper_full_get_segment_t1(ctx, prev)) / 100.0
                 let curStart = Double(whisper_full_get_segment_t0(ctx, i)) / 100.0
 
                 let hasSilenceBreak = silenceBreaks.contains { breakTime in
