@@ -12,6 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cancelMenuItem: NSMenuItem!
     private var inputDeviceMenu: NSMenu!
     private var modelMenu: NSMenu!
+    private var errorRowItem: NSMenuItem!
+    private var errorActionItem: NSMenuItem!
+    private var disableAutoPasteItem: NSMenuItem!
+    private var dismissErrorItem: NSMenuItem!
+    private var errorSeparator: NSMenuItem!
     private let recordingOverlay = RecordingOverlay()
     private var pulseTimer: Timer?
     private var pulseOn = true
@@ -33,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyState(controller.state)
         observeState()
         observeErrors()
+        observePersistentError()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -46,6 +52,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.delegate = self
+
+        errorRowItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        errorRowItem.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
+        errorRowItem.isEnabled = false
+        errorRowItem.isHidden = true
+        menu.addItem(errorRowItem)
+
+        errorActionItem = NSMenuItem(
+            title: "Open Accessibility Settings…",
+            action: #selector(openAccessibilitySettings),
+            keyEquivalent: ""
+        )
+        errorActionItem.target = self
+        errorActionItem.isHidden = true
+        menu.addItem(errorActionItem)
+
+        disableAutoPasteItem = NSMenuItem(
+            title: "Turn Off Auto-paste",
+            action: #selector(disableAutoPaste),
+            keyEquivalent: ""
+        )
+        disableAutoPasteItem.target = self
+        disableAutoPasteItem.isHidden = true
+        menu.addItem(disableAutoPasteItem)
+
+        dismissErrorItem = NSMenuItem(
+            title: "Dismiss",
+            action: #selector(dismissPersistentError),
+            keyEquivalent: ""
+        )
+        dismissErrorItem.target = self
+        dismissErrorItem.isHidden = true
+        menu.addItem(dismissErrorItem)
+
+        errorSeparator = .separator()
+        errorSeparator.isHidden = true
+        menu.addItem(errorSeparator)
 
         toggleMenuItem = NSMenuItem(
             title: "Start Recording",
@@ -70,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         inputDeviceMenu = NSMenu()
-        let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
+        let inputDeviceItem = NSMenuItem(title: "Input", action: nil, keyEquivalent: "")
         inputDeviceItem.submenu = inputDeviceMenu
         menu.addItem(inputDeviceItem)
 
@@ -129,7 +172,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             recordingOverlay.show(mode: .transcribing, controller: controller)
             stopPulse()
         case .idle:
-            recordingOverlay.hide()
+            if let feedback = controller.lastCompletion {
+                recordingOverlay.showFeedback(feedback, controller: controller)
+                controller.clearCompletion()
+            } else {
+                recordingOverlay.hide()
+            }
             stopPulse()
         }
 
@@ -170,8 +218,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         applyShortcutToMenuItem()
+        refreshErrorMenu()
         refreshInputDeviceMenu()
         refreshModelMenu()
+    }
+
+    @objc private func disableAutoPaste() {
+        UserDefaults.standard.set(false, forKey: "autoPaste")
+        controller.dismissPersistentError()
+    }
+
+    private func refreshErrorMenu() {
+        guard let error = controller.persistentError else {
+            errorRowItem.isHidden = true
+            errorActionItem.isHidden = true
+            disableAutoPasteItem.isHidden = true
+            dismissErrorItem.isHidden = true
+            errorSeparator.isHidden = true
+            return
+        }
+        errorRowItem.title = error.menuMessage
+        errorRowItem.isHidden = false
+        dismissErrorItem.isHidden = false
+        errorSeparator.isHidden = false
+        let isAccessibility = error == .noAccessibility
+        errorActionItem.isHidden = !isAccessibility
+        disableAutoPasteItem.isHidden = !isAccessibility
+    }
+
+    @objc private func dismissPersistentError() {
+        controller.dismissPersistentError()
+    }
+
+    @objc private func openAccessibilitySettings() {
+        Paster.openAccessibilitySettings()
     }
 
     @objc private func toggleRecording() {
@@ -203,6 +283,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.showErrorAlert(error)
                 self.controller.dismissError()
                 self.observeErrors()
+            }
+        }
+    }
+
+    private func observePersistentError() {
+        withObservationTracking { [weak self] in
+            _ = self?.controller.persistentError
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.refreshErrorMenu()
+                self.observePersistentError()
             }
         }
     }
@@ -242,7 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             alert.runModal()
         case .noAccessibility:
             alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Vox needs Accessibility access to paste transcribed text. Grant permission in System Settings → Privacy & Security → Accessibility."
+            alert.informativeText = "Vox couldn't paste — Accessibility access is missing. Your transcript is on the clipboard, so you can paste it manually with ⌘V. To enable auto-paste, grant access in System Settings → Privacy & Security → Accessibility."
             alert.addButton(withTitle: "OK")
             alert.runModal()
         }

@@ -1,34 +1,46 @@
 import AppKit
 import OSLog
 
+enum PasteResult: Equatable {
+    case pasted
+    case copied
+    case failedNoAccessibility
+}
+
 enum Paster {
     private static let logger = Logger(subsystem: "com.bartoszadamczyk.Vox", category: "Paster")
 
     @discardableResult
-    static func paste(_ text: String) async -> Bool {
+    static func paste(_ text: String) async -> PasteResult {
         let defaults = UserDefaults.standard
         let autoPaste = defaults.object(forKey: "autoPaste") as? Bool ?? true
         let preserveClipboard = defaults.object(forKey: "preserveClipboard") as? Bool ?? true
-
         let pasteboard = NSPasteboard.general
+
+        if autoPaste && !hasAccessibilityPermission() {
+            _ = writeToPasteboard(pasteboard, text: text)
+            logger.error("Auto-paste blocked — Accessibility permission missing; text left on clipboard")
+            return .failedNoAccessibility
+        }
+
         let savedData = preserveClipboard && autoPaste ? savePasteboard(pasteboard) : nil
         let changeCountAfterWrite = writeToPasteboard(pasteboard, text: text)
 
-        guard autoPaste else { return true }
+        guard autoPaste else { return .copied }
 
         guard simulateCommandV() else {
-            logger.error("Failed to simulate ⌘V — check Accessibility permission")
+            logger.error("Failed to simulate ⌘V")
             if let savedData {
                 restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
             }
-            return false
+            return .failedNoAccessibility
         }
 
         if let savedData {
             try? await Task.sleep(for: .milliseconds(150))
             restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
         }
-        return true
+        return .pasted
     }
 
     static func hasAccessibilityPermission() -> Bool {
@@ -41,6 +53,12 @@ enum Paster {
         AXIsProcessTrustedWithOptions(
             ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         )
+    }
+
+    static func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private static func savePasteboard(_ pasteboard: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {

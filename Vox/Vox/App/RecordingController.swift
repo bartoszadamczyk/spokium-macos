@@ -16,6 +16,23 @@ enum RecordingError: Equatable {
     case transcriptionFailed(String)
     case downloadFailed(String)
     case noAccessibility
+
+    var menuMessage: String {
+        switch self {
+        case .noModel: "No Whisper model selected"
+        case .microphoneDenied: "Microphone access denied"
+        case .recordingFailed: "Recording failed"
+        case .transcriptionFailed: "Transcription failed"
+        case .downloadFailed: "Model download failed"
+        case .noAccessibility: "Paste blocked — Accessibility permission needed"
+        }
+    }
+}
+
+enum CompletionFeedback: Equatable {
+    case pasted
+    case copied
+    case empty
 }
 
 @Observable
@@ -23,6 +40,8 @@ enum RecordingError: Equatable {
 final class RecordingController {
     private(set) var state: RecordingState = .idle
     private(set) var lastError: RecordingError?
+    private(set) var persistentError: RecordingError?
+    private(set) var lastCompletion: CompletionFeedback?
     private(set) var inputLevel: Float = 0
 
     private let recorder = AudioRecorder()
@@ -76,6 +95,19 @@ final class RecordingController {
         lastError = nil
     }
 
+    func dismissPersistentError() {
+        persistentError = nil
+    }
+
+    func clearCompletion() {
+        lastCompletion = nil
+    }
+
+    private func reportError(_ error: RecordingError) {
+        lastError = error
+        persistentError = error
+    }
+
     func countDictionaryTokens(_ text: String) async -> Int? {
         let manager = ModelManager()
         guard let modelURL = manager.selectedModelURL else { return nil }
@@ -120,7 +152,7 @@ final class RecordingController {
     private func start() async {
         let manager = ModelManager()
         guard manager.selectedModelURL != nil else {
-            lastError = .noModel
+            reportError(.noModel)
             return
         }
 
@@ -132,14 +164,15 @@ final class RecordingController {
             startLevelMonitoring()
             startEscapeMonitor()
             startAutoStopTask()
+            RecordingSounds.playStart()
             logger.info("Recording started")
         } catch AudioRecorderError.microphoneDenied {
             try? FileManager.default.removeItem(at: url)
-            lastError = .microphoneDenied
+            reportError(.microphoneDenied)
         } catch {
             try? FileManager.default.removeItem(at: url)
             logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
-            lastError = .recordingFailed(error.localizedDescription)
+            reportError(.recordingFailed(error.localizedDescription))
         }
     }
 
@@ -149,7 +182,7 @@ final class RecordingController {
         autoStopTask?.cancel()
         autoStopTask = nil
         guard let url = recorder.stop() else {
-            lastError = .recordingFailed("Audio recording failed to save.")
+            reportError(.recordingFailed("Audio recording failed to save."))
             state = .idle
             stopEscapeMonitor()
             return
@@ -169,7 +202,7 @@ final class RecordingController {
     private func transcribe(url: URL) async {
         let manager = ModelManager()
         guard let modelURL = manager.selectedModelURL else {
-            lastError = .noModel
+            reportError(.noModel)
             return
         }
 
@@ -195,17 +228,27 @@ final class RecordingController {
                 return
             }
             let finalText = SnippetStore.apply(to: result.text)
-            guard !finalText.isEmpty else { return }
-            let pasted = await Paster.paste(finalText)
-            if !pasted {
-                lastError = .noAccessibility
+            guard !finalText.isEmpty else {
+                lastCompletion = .empty
+                RecordingSounds.playEmpty()
+                return
+            }
+            switch await Paster.paste(finalText) {
+            case .pasted:
+                lastCompletion = .pasted
+                RecordingSounds.playPaste()
+            case .copied:
+                lastCompletion = .copied
+                RecordingSounds.playPaste()
+            case .failedNoAccessibility:
+                reportError(.noAccessibility)
                 Paster.requestAccessibilityPermission()
             }
         } catch TranscriberError.cancelled {
             logger.info("Transcription aborted")
         } catch {
             logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
-            lastError = .transcriptionFailed(error.localizedDescription)
+            reportError(.transcriptionFailed(error.localizedDescription))
         }
     }
 
@@ -247,7 +290,7 @@ final class RecordingController {
 
     private func startAutoStopTask() {
         autoStopTask?.cancel()
-        let minutes = UserDefaults.standard.object(forKey: "maxRecordingMinutes") as? Double ?? 5
+        let minutes = UserDefaults.standard.object(forKey: "maxRecordingMinutes") as? Double ?? 10
         guard minutes > 0 else { return }
         let nanoseconds = UInt64(minutes * 60 * 1_000_000_000)
         autoStopTask = Task { [weak self] in

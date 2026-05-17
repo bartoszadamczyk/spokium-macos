@@ -59,7 +59,7 @@ struct WhisperModel: Identifiable, Equatable {
         ),
     ]
 
-    static func validateFile(at url: URL, expectedSHA1: String) throws {
+    nonisolated static func validateFile(at url: URL, expectedSHA1: String) throws {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
 
@@ -110,6 +110,13 @@ final class ModelManager {
     private(set) var downloads: [String: Double] = [:]
     private(set) var downloadedNames: Set<String>
     private(set) var lastDownloadError: String?
+    private(set) var verification: VerificationState = .idle
+
+    enum VerificationState: Equatable {
+        case idle
+        case running
+        case finished(passed: [String], failed: [String])
+    }
     var selectedModelName: String {
         didSet { UserDefaults.standard.set(selectedModelName, forKey: "selectedModel") }
     }
@@ -139,6 +146,34 @@ final class ModelManager {
 
     func dismissDownloadError() {
         lastDownloadError = nil
+    }
+
+    func dismissVerification() {
+        verification = .idle
+    }
+
+    func verifyDownloaded() {
+        guard verification != .running else { return }
+        verification = .running
+        let toCheck: [(displayName: String, url: URL, sha1: String)] = WhisperModel.all
+            .filter { downloadedNames.contains($0.name) }
+            .map { ($0.displayName, $0.localURL, $0.expectedSHA1) }
+        Task.detached { [weak self] in
+            var passed: [String] = []
+            var failed: [String] = []
+            for entry in toCheck {
+                do {
+                    try WhisperModel.validateFile(at: entry.url, expectedSHA1: entry.sha1)
+                    passed.append(entry.displayName)
+                } catch {
+                    failed.append(entry.displayName)
+                }
+            }
+            await MainActor.run { [weak self] in
+                self?.verification = .finished(passed: passed, failed: failed)
+                self?.logger.info("Verification finished: \(passed.count) passed, \(failed.count) failed")
+            }
+        }
     }
 
     func download(_ model: WhisperModel) {

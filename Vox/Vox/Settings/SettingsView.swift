@@ -17,7 +17,7 @@ struct SettingsView: View {
             SnippetsTab()
                 .tabItem { Label("Snippets", systemImage: "text.append") }
         }
-        .frame(width: 600, height: 500)
+        .frame(width: 600, height: 400)
     }
 }
 
@@ -25,27 +25,13 @@ private struct GeneralTab: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
     @AppStorage("pushToRecord") private var pushToRecord = false
+    @AppStorage("playSounds") private var playSounds = false
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
     var body: some View {
         Form {
-            Section("Hotkey") {
-                KeyboardShortcuts.Recorder("Shortcut:", name: .toggleRecording)
-                Toggle("Push to record (hold shortcut while speaking)", isOn: $pushToRecord)
-            }
-            Section("Audio Input") {
-                Picker("Input device:", selection: $selectedInputDevice) {
-                    Text(defaultInputName.isEmpty ? "System Default" : "System Default (\(defaultInputName))").tag("")
-                    if !devices.isEmpty {
-                        Divider()
-                        ForEach(devices, id: \.uid) { device in
-                            Text(device.name).tag(device.uid)
-                        }
-                    }
-                }
-            }
-            Section("Startup") {
+            Section("App") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
@@ -58,6 +44,20 @@ private struct GeneralTab: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+            }
+            Section("Recording") {
+                KeyboardShortcuts.Recorder("Shortcut:", name: .toggleRecording)
+                Toggle("Push to record (hold shortcut while speaking)", isOn: $pushToRecord)
+                Picker("Input device:", selection: $selectedInputDevice) {
+                    Text(defaultInputName.isEmpty ? "System Default" : "System Default (\(defaultInputName))").tag("")
+                    if !devices.isEmpty {
+                        Divider()
+                        ForEach(devices, id: \.uid) { device in
+                            Text(device.name).tag(device.uid)
+                        }
+                    }
+                }
+                Toggle("Play sound effects", isOn: $playSounds)
             }
         }
         .formStyle(.grouped)
@@ -78,7 +78,7 @@ private struct TranscriptionTab: View {
 
     var body: some View {
         Form {
-            Section("Language") {
+            Section("Transcription") {
                 Picker("Language:", selection: $selectedLanguage) {
                     Text("Auto-detect").tag("auto")
                     Divider()
@@ -86,8 +86,6 @@ private struct TranscriptionTab: View {
                         Text(lang.displayName).tag(lang.code)
                     }
                 }
-            }
-            Section("Recording") {
                 Picker("Auto-stop after:", selection: $maxRecordingMinutes) {
                     Text("1 minute").tag(1.0)
                     Text("2 minutes").tag(2.0)
@@ -97,9 +95,7 @@ private struct TranscriptionTab: View {
                     Divider()
                     Text("No limit").tag(0.0)
                 }
-            }
-            Section("Paragraphs") {
-                Toggle("Split on silence gaps", isOn: $paragraphSplitting)
+                Toggle("Split paragraphs on silence", isOn: $paragraphSplitting)
                 if paragraphSplitting {
                     HStack {
                         Text("Silence threshold:")
@@ -114,10 +110,45 @@ private struct TranscriptionTab: View {
                 Toggle("Auto-paste into focused window", isOn: $autoPaste)
                 if autoPaste {
                     Toggle("Restore clipboard after paste", isOn: $preserveClipboard)
+                    AccessibilityStatusRow()
                 }
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct AccessibilityStatusRow: View {
+    @State private var hasPermission = Paster.hasAccessibilityPermission()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: hasPermission ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(hasPermission ? AnyShapeStyle(.green) : AnyShapeStyle(.orange))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hasPermission
+                    ? "Accessibility permission granted — paste is ready."
+                    : "Accessibility permission required to paste.")
+                    .font(.callout)
+                if !hasPermission {
+                    Text("Without it, Vox can only copy to the clipboard.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if !hasPermission {
+                Button("Request Permission") {
+                    Paster.requestAccessibilityPermission()
+                }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                hasPermission = Paster.hasAccessibilityPermission()
+                try? await Task.sleep(for: .seconds(1.5))
+            }
+        }
     }
 }
 
@@ -154,6 +185,10 @@ private struct ModelTab: View {
         )
     }
 
+    private var hasDownloads: Bool {
+        !modelManager.downloadedNames.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             List {
@@ -163,13 +198,29 @@ private struct ModelTab: View {
             }
             .listStyle(.inset)
 
-            HStack {
+            HStack(spacing: 16) {
                 Button("Show in Finder") {
                     try? ModelLocator.ensureDirectoryExists()
                     NSWorkspace.shared.open(ModelLocator.modelsDirectory)
                 }
                 .buttonStyle(.link)
                 .font(.callout)
+
+                if hasDownloads {
+                    Button(verifyButtonLabel) {
+                        modelManager.verifyDownloaded()
+                    }
+                    .buttonStyle(.link)
+                    .font(.callout)
+                    .disabled(modelManager.verification == .running)
+                }
+
+                if case .finished(let passed, let failed) = modelManager.verification {
+                    Text(verificationSummary(passed: passed, failed: failed))
+                        .font(.callout)
+                        .foregroundStyle(failed.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
+                }
+
                 Spacer()
             }
             .padding(.leading, 12)
@@ -180,6 +231,17 @@ private struct ModelTab: View {
         } message: {
             Text(modelManager.lastDownloadError ?? "")
         }
+    }
+
+    private var verifyButtonLabel: String {
+        modelManager.verification == .running ? "Verifying…" : "Verify Hashes"
+    }
+
+    private func verificationSummary(passed: [String], failed: [String]) -> String {
+        if failed.isEmpty {
+            return "All \(passed.count) verified"
+        }
+        return "Failed: \(failed.joined(separator: ", "))"
     }
 }
 
@@ -347,4 +409,6 @@ private struct SnippetsTab: View {
         }
     }
 }
+
+
 

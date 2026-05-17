@@ -1,17 +1,23 @@
 import AppKit
 import SwiftUI
 
-enum OverlayMode {
+enum OverlayMode: Equatable {
     case recording
     case transcribing
+    case pasted
+    case copied
+    case empty
 }
 
 @MainActor
 final class RecordingOverlay {
     private var window: NSWindow?
     private var hostingView: NSHostingView<OverlayContentView>?
+    private var feedbackHideTask: Task<Void, Never>?
 
     func show(mode: OverlayMode, controller: RecordingController) {
+        feedbackHideTask?.cancel()
+        feedbackHideTask = nil
         if let hostingView {
             hostingView.rootView = OverlayContentView(mode: mode, controller: controller)
             DispatchQueue.main.async { [weak self] in
@@ -52,9 +58,26 @@ final class RecordingOverlay {
     }
 
     func hide() {
+        feedbackHideTask?.cancel()
+        feedbackHideTask = nil
         window?.close()
         window = nil
         hostingView = nil
+    }
+
+    func showFeedback(_ feedback: CompletionFeedback, controller: RecordingController) {
+        let mode: OverlayMode
+        switch feedback {
+        case .pasted: mode = .pasted
+        case .copied: mode = .copied
+        case .empty: mode = .empty
+        }
+        show(mode: mode, controller: controller)
+        feedbackHideTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            self?.hide()
+        }
     }
 
     private func reposition() {
@@ -86,6 +109,24 @@ private struct OverlayContentView: View {
                     ProgressView()
                         .controlSize(.small)
                     Text("Transcribing…")
+                        .font(.system(size: 18, weight: .medium))
+                case .pasted:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 20, weight: .medium))
+                    Text("Pasted")
+                        .font(.system(size: 18, weight: .medium))
+                case .copied:
+                    Image(systemName: "doc.on.clipboard.fill")
+                        .foregroundStyle(.blue)
+                        .font(.system(size: 20, weight: .medium))
+                    Text("Copied to clipboard")
+                        .font(.system(size: 18, weight: .medium))
+                case .empty:
+                    Image(systemName: "mic.slash.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 20, weight: .medium))
+                    Text("No speech detected")
                         .font(.system(size: 18, weight: .medium))
                 }
             }

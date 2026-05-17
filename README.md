@@ -5,14 +5,20 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 ## Goals
 
 - **Native, lightweight.** Single Swift app, no Electron, no background daemon zoo.
-- **Lives in the menu bar.** No dock icon. The status item shows idle / recording / transcribing state with a pulsing red pill indicator while recording.
+- **Lives in the menu bar.** No dock icon (ever, including when Settings is open). The status item shows idle / recording / transcribing state with a pulsing red waveform icon while recording.
 - **Global hotkey to record.** Toggle style (default ⌥Space): tap to start recording, tap again to stop, transcribe, and paste. Push-to-record mode also available (hold while speaking, release to transcribe).
 - **On-device only.** All audio and transcription stays local; no network calls except model downloads.
 - **Menu bar dropdown** with quick switching for input device and active whisper model (no need to open Settings for routine changes).
 - **Snippets.** Define spoken triggers like "calendar link" that get replaced with arbitrary text on paste. Case-insensitive, whole-word matching.
-- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
+- **Live audio level meter.** Recording overlay shows a microphone icon that fills red from the bottom up based on input volume — instant feedback that the mic is working.
+- **Cancel anytime.** Press Esc (or menu item) to discard a recording or abort an in-flight transcription. Whisper's abort callback is wired up, so cancelling during inference actually stops compute.
+- **Auto-stop after time limit.** Configurable maximum recording duration (default 10 min) prevents accidentally leaving the hotkey on forever.
+- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, auto-stop after N minutes, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
 - **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 1.5s) and inserts paragraph breaks so pasted output keeps structure.
 - **Pastes into the active window.** Uses the system pasteboard + a synthesized ⌘V. Optionally restores previous clipboard contents after paste. Can also be set to clipboard-only mode (no auto-paste).
+- **Paste feedback overlay.** After transcription the HUD briefly confirms the outcome — "Pasted" when auto-paste fires, "Copied to clipboard" when auto-paste is off, and "No speech detected" (with a soft chime) when the transcript came back empty. No transcript content is stored.
+- **Accessibility preflight.** Settings → Transcription shows live paste readiness (granted / required) with a "Request Permission" button. The paste pipeline also preflights `AXIsProcessTrusted` before synthesizing ⌘V — without permission the transcript is left on the clipboard instead of dropping silently.
+- **Persistent error row in the menu.** The status menu keeps a non-sensitive error message until the user dismisses it. For paste-permission failures it also surfaces "Open Accessibility Settings…" and a one-shot "Turn Off Auto-paste" remediation, so users can recover without digging through Settings.
 - **No transcription history.** Nothing is saved to disk after the paste. Logs do not include transcribed content.
 
 ## Non-goals
@@ -63,7 +69,7 @@ The app runs under App Sandbox. Required entitlements:
 User-granted permissions (prompted at first use, not at install):
 
 - **Microphone** — backed by `NSMicrophoneUsageDescription` in `Info.plist`.
-- **Accessibility** — required to synthesize the ⌘V keystroke. User grants this in System Settings → Privacy & Security → Accessibility. If missing, the app shows an alert after transcription and triggers the system prompt.
+- **Accessibility** — required to synthesize the ⌘V keystroke. User grants this in System Settings → Privacy & Security → Accessibility. Settings → Transcription surfaces a live readiness indicator with a "Request Permission" button so the grant can happen up front; if missing at paste time, the paste is skipped (transcript stays on the clipboard), an alert is shown, the system prompt is triggered, and a persistent menu row offers either "Open Accessibility Settings…", "Turn Off Auto-paste", or "Dismiss".
 
 ## Decisions
 
@@ -146,7 +152,7 @@ All core functionality is implemented and working:
 - [x] **Phase 3b** — model picker UI. Settings → Model tab lists 6 models (tiny through large-v3-turbo), downloads from Hugging Face with progress bar, validates with SHA-1 checksums and GGML magic bytes. "Show in Finder" button for manual model management.
 - [x] **Phase 4** — paste pipeline. Save current pasteboard, write transcript, synthesize ⌘V via `CGEvent`, optionally restore previous pasteboard after 150ms. Configurable auto-paste and clipboard restore settings.
 - [x] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` with real token counting (224 max). Paragraph splitting via RMS-based silence detection on recorded audio (configurable threshold). User-defined snippets find/replace after transcription.
-- [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD (recording + transcribing states), error alerts (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing), launch at login, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration.
+- [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD with live audio level meter (mic icon fills red bottom-up) and brief pasted / copied / no-speech-detected confirmation, cancel-anytime via Esc or menu (uses whisper's abort callback for true mid-flight interruption), auto-stop after configurable time limit, error alerts plus a persistent error row in the status menu (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing) with a one-shot "Turn Off Auto-paste" remediation for paste failures, Accessibility-permission preflight in Settings and before each ⌘V synth, launch at login, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration. App stays in `.accessory` activation policy permanently so no dock icon ever appears.
 - [x] **Phase 7** — distribution. Signed with Developer ID, notarized via Apple, Hardened Runtime enabled.
 
 ### Settings (UserDefaults keys)
@@ -163,3 +169,4 @@ All core functionality is implemented and working:
 | `selectedInputDevice` | String | `""` | Audio input device UID (empty = system default) |
 | `pushToRecord` | Bool | `false` | If true, hold shortcut to record instead of toggle |
 | `snippets` | Data (JSON) | `[]` | Array of `{id, trigger, replacement}` for find/replace |
+| `maxRecordingMinutes` | Double | `10` | Auto-stop recording after N minutes (0 = no limit) |
