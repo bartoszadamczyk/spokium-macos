@@ -23,19 +23,19 @@ struct WhisperModel: Identifiable, Equatable {
     static let all: [WhisperModel] = [
         WhisperModel(
             name: "tiny", displayName: "Tiny",
-            sizeLabel: "~75 MB", qualityNote: "Fastest, lower accuracy",
+            sizeLabel: "~78 MB", qualityNote: "Fastest, lower accuracy",
             fileName: "ggml-tiny.bin",
             expectedSHA1: "bd577a113a864445d4c299885e0cb97d4ba92b5f"
         ),
         WhisperModel(
             name: "base", displayName: "Base",
-            sizeLabel: "~142 MB", qualityNote: "Good balance for short dictation",
+            sizeLabel: "~148 MB", qualityNote: "Good balance for short dictation",
             fileName: "ggml-base.bin",
             expectedSHA1: "465707469ff3a37a2b9b8d8f89f2f99de7299dac"
         ),
         WhisperModel(
             name: "small", displayName: "Small",
-            sizeLabel: "~466 MB", qualityNote: "Better accuracy, still fast on Apple Silicon",
+            sizeLabel: "~488 MB", qualityNote: "Better accuracy, still fast on Apple Silicon",
             fileName: "ggml-small.bin",
             expectedSHA1: "55356645c2b361a969dfd0ef2c5a50d530afd8d5"
         ),
@@ -53,7 +53,7 @@ struct WhisperModel: Identifiable, Equatable {
         ),
         WhisperModel(
             name: "large-v3-turbo", displayName: "Large v3 Turbo",
-            sizeLabel: "~809 MB", qualityNote: "Near-best accuracy, much faster",
+            sizeLabel: "~1.6 GB", qualityNote: "Near-best accuracy, much faster",
             fileName: "ggml-large-v3-turbo.bin",
             expectedSHA1: "4af2b29d7ec73d781377bfd1758ca957a807e941"
         ),

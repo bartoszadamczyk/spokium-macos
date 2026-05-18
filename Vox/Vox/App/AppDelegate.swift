@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let settingsScene = NSHostingSceneRepresentation {
         Settings {
-            SettingsView()
+            SettingsSceneRoot()
         }
     }
 
@@ -39,6 +39,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         observeState()
         observeErrors()
         observePersistentError()
+        observeStateForInputDeviceMenu()
+    }
+
+    private func observeStateForInputDeviceMenu() {
+        withObservationTracking { [weak self] in
+            _ = self?.controller.state
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.refreshInputDeviceMenu()
+                self.observeStateForInputDeviceMenu()
+            }
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -113,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         inputDeviceMenu = NSMenu()
+        inputDeviceMenu.autoenablesItems = false
         let inputDeviceItem = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
         inputDeviceItem.submenu = inputDeviceMenu
         menu.addItem(inputDeviceItem)
@@ -353,12 +367,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshInputDeviceMenu() {
         inputDeviceMenu.removeAllItems()
         let selectedUID = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
+        let locked = controller.state != .idle
 
         let defaultName = AudioInputDevice.defaultInputName() ?? "Unknown"
         let defaultItem = NSMenuItem(title: "System Default (\(defaultName))", action: #selector(selectInputDevice(_:)), keyEquivalent: "")
         defaultItem.target = self
         defaultItem.representedObject = "" as String
         defaultItem.state = selectedUID.isEmpty ? .on : .off
+        defaultItem.isEnabled = !locked
         inputDeviceMenu.addItem(defaultItem)
 
         let devices = AudioInputDevice.available()
@@ -370,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.target = self
             item.representedObject = device.uid
             item.state = device.uid == selectedUID ? .on : .off
+            item.isEnabled = !locked
             inputDeviceMenu.addItem(item)
         }
     }

@@ -142,7 +142,12 @@ private struct LevelMic: View {
     let level: Float
 
     private var normalized: CGFloat {
-        max(0, min(1, CGFloat(level) * 8))
+        guard level > 0 else { return 0 }
+        let db = 20 * log10(Double(level))
+        let minDb = -50.0
+        let maxDb = -10.0
+        let clamped = max(minDb, min(maxDb, db))
+        return CGFloat((clamped - minDb) / (maxDb - minDb))
     }
 
     var body: some View {

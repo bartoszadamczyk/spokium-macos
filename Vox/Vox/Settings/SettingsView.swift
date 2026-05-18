@@ -1,7 +1,21 @@
+import AppKit
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 import whisper
+
+struct SettingsSceneRoot: View {
+    var body: some View {
+        if let controller = (NSApp.delegate as? AppDelegate)?.controller {
+            SettingsView()
+                .environment(controller)
+        } else {
+            Text("Settings unavailable")
+                .foregroundStyle(.secondary)
+                .frame(width: 600, height: 400)
+        }
+    }
+}
 
 struct SettingsView: View {
     var body: some View {
@@ -22,6 +36,7 @@ struct SettingsView: View {
 }
 
 private struct GeneralTab: View {
+    @Environment(RecordingController.self) private var controller
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
     @AppStorage("pushToRecord") private var pushToRecord = false
@@ -57,6 +72,7 @@ private struct GeneralTab: View {
                         }
                     }
                 }
+                .disabled(controller.state != .idle)
                 Toggle("Play sound effects", isOn: $playSounds)
             }
         }
@@ -222,8 +238,10 @@ private struct ModelTab: View {
                 }
 
                 Spacer()
+
+                DiskUsageView(downloadedNames: modelManager.downloadedNames)
             }
-            .padding(.leading, 12)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
         .alert("Download Failed", isPresented: showError) {
@@ -245,9 +263,54 @@ private struct ModelTab: View {
     }
 }
 
+private struct DiskUsageView: View {
+    let downloadedNames: Set<String>
+    @State private var usedBytes: Int64 = 0
+    @State private var freeBytes: Int64 = 0
+
+    var body: some View {
+        Text(label)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .onAppear(perform: recompute)
+            .onChange(of: downloadedNames) { _, _ in recompute() }
+    }
+
+    private var label: String {
+        let used = ByteCountFormatter.string(fromByteCount: usedBytes, countStyle: .file)
+        let free = ByteCountFormatter.string(fromByteCount: freeBytes, countStyle: .file)
+        return "\(used) used · \(free) free"
+    }
+
+    private func recompute() {
+        usedBytes = computeUsed()
+        freeBytes = computeFree()
+    }
+
+    private func computeUsed() -> Int64 {
+        let dir = ModelLocator.modelsDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return files.reduce(Int64(0)) { sum, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            return sum + Int64(size)
+        }
+    }
+
+    private func computeFree() -> Int64 {
+        try? ModelLocator.ensureDirectoryExists()
+        let dir = ModelLocator.modelsDirectory
+        let values = try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return Int64(values?.volumeAvailableCapacityForImportantUsage ?? 0)
+    }
+}
+
 private struct ModelRow: View {
     let model: WhisperModel
     @Bindable var manager: ModelManager
+    @Environment(RecordingController.self) private var controller
     @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
@@ -296,6 +359,7 @@ private struct ModelRow: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .disabled(manager.selectedModelName == model.name && controller.state != .idle)
                 }
             } else {
                 Button("Download") {

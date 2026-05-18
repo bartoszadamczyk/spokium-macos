@@ -60,6 +60,21 @@ final class RecordingController {
         KeyboardShortcuts.onKeyUp(for: .toggleRecording) { [weak self] in
             self?.handleKeyUp()
         }
+        recorder.onConfigurationChange = { [weak self] in
+            self?.handleAudioConfigurationChange()
+        }
+    }
+
+    private func handleAudioConfigurationChange() {
+        guard case .recording = state else { return }
+        logger.error("Audio configuration changed during recording — aborting")
+        stopLevelMonitoring()
+        stopEscapeMonitor()
+        autoStopTask?.cancel()
+        autoStopTask = nil
+        _ = recorder.stop()
+        state = .idle
+        reportError(.recordingFailed("Audio input changed during recording."))
     }
 
     private var isPushToRecord: Bool {
@@ -150,6 +165,9 @@ final class RecordingController {
     }
 
     private func start() async {
+        lastError = nil
+        persistentError = nil
+
         let manager = ModelManager()
         guard manager.selectedModelURL != nil else {
             reportError(.noModel)

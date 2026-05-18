@@ -18,11 +18,14 @@ private final class AudioLevelMeter: @unchecked Sendable {
 
 @MainActor
 final class AudioRecorder {
-    private let engine = AVAudioEngine()
+    private var engine = AVAudioEngine()
     private var outputFile: AVAudioFile?
     private let writeErrorFlag = WriteErrorFlag()
     private let levelMeter = AudioLevelMeter()
+    private var configChangeObserver: NSObjectProtocol?
     private let logger = Logger(subsystem: "com.bartoszadamczyk.Vox", category: "AudioRecorder")
+
+    var onConfigurationChange: (@MainActor () -> Void)?
 
     var isRunning: Bool { engine.isRunning }
     var currentLevel: Float { levelMeter.level }
@@ -33,6 +36,7 @@ final class AudioRecorder {
         let granted = await AVCaptureDevice.requestAccess(for: .audio)
         guard granted else { throw AudioRecorderError.microphoneDenied }
 
+        engine = AVAudioEngine()
         let inputNode = engine.inputNode
         if let uid = UserDefaults.standard.string(forKey: "selectedInputDevice"),
            !uid.isEmpty,
@@ -74,15 +78,35 @@ final class AudioRecorder {
             meter.level = (sum / Float(frameLength)).squareRoot()
         }
 
+        let startInstant = ContinuousClock.now
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if ContinuousClock.now - startInstant < .seconds(2) { return }
+                self.onConfigurationChange?()
+            }
+        }
+
         try engine.start()
     }
 
     func stop() -> URL? {
-        guard engine.isRunning else { return nil }
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
+        }
+        let wasRunning = engine.isRunning
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        if wasRunning {
+            engine.stop()
+        }
         let url = outputFile?.url
         outputFile = nil
+        guard wasRunning else { return nil }
         if writeErrorFlag.failed {
             logger.error("Audio write errors occurred during recording")
             return nil
