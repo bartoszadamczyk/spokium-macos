@@ -13,7 +13,7 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 - **Min target:** macOS 26.3. Required for `NSHostingSceneRepresentation` used to open Settings from AppKit menu bar code.
 - **Sandboxed.** The app runs under App Sandbox. Accessibility-driven ⌘V, global hotkeys, and microphone all work in sandbox once the user grants the relevant permissions.
 - **IDE:** Xcode. The project is an Xcode app target, not a SwiftPM executable, because we need an `.app` bundle, `Info.plist`, entitlements, and a menu-bar `LSUIElement` flag.
-- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via a locally-built XCFramework. The user clones `whisper.cpp` next to this repo, runs `./build-xcframework.sh`, and copies the resulting `whisper.xcframework` into `Vox/Frameworks/`. The framework is gitignored. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Vox`, so no collision. Models downloaded at runtime, not bundled.
+- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via a locally-built XCFramework. The user clones `whisper.cpp` next to this repo, runs `./build-xcframework.sh`, and copies the resulting `whisper.xcframework` into `Spokium/Frameworks/`. The framework is gitignored. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Spokium`, so no collision. Models downloaded at runtime, not bundled.
 - **Global hotkey:** [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) SPM package (v2.4.0+). Wraps Carbon `RegisterEventHotKey` and gives us a SwiftUI recorder view for the settings screen. Default: ⌥Space. Supports toggle mode (default) or push-to-record (`onKeyDown` starts, `onKeyUp` stops) via `pushToRecord` UserDefaults flag.
 - **Audio capture:** `AVAudioEngine` with input node tap, writing native-rate CAF to temp directory. Supports user-selectable input device via CoreAudio `AudioUnitSetProperty` (stored as device UID in UserDefaults). Resampled to 16 kHz mono Float32 by `AudioLoader` before transcription.
 - **Paste mechanism:** write to `NSPasteboard.general`, synthesize ⌘V via `CGEvent` (key code 9), optionally restore previous pasteboard contents after 150ms delay. Both auto-paste and clipboard restore are user-configurable.
@@ -46,25 +46,25 @@ Things that do **not** need an entitlement:
 - **Paragraph splitting** — RMS-based silence detection on the recorded audio samples (50ms windows, configurable threshold). Silence gaps above the threshold insert paragraph breaks between whisper segments.
 - **Custom dictionary** — bias via whisper's `initial_prompt`. User-entered names/spellings are joined into the prompt before each transcription. Token count is shown live using `whisper_token_count` against the loaded model.
 - **Snippets** — post-transcription find/replace. JSON-encoded `[Snippet]` (id, trigger, replacement) stored in UserDefaults. Applied after whisper output, before paste. Case-insensitive, whole-word regex match (`\b…\b`).
-- **Model storage** — no bundled model. Models live at `~/Library/Application Support/vox-macos/models/` (resolved via `FileManager` APIs). Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo, `ggml-*.bin` files) and validated with GGML magic bytes and SHA-1 checksums before acceptance. Settings → Model tab shows a list with sizes + quality notes. A "Show in Finder" button lets users manage models manually.
+- **Model storage** — no bundled model. Models live at `~/Library/Application Support/Spokium/models/` (resolved via `FileManager` APIs). Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo, `ggml-*.bin` files) and validated with GGML magic bytes and SHA-1 checksums before acceptance. Settings → Model tab shows a list with sizes + quality notes. A "Show in Finder" button lets users manage models manually.
 - **Model validation** — downloads are checked for HTTP 2xx status, GGML format magic bytes (ggml/ggmf/ggjt), and SHA-1 checksum match against known hashes.
 - **Distribution** — GitHub Releases, signed with Developer ID and notarized via Apple. Hardened Runtime enabled.
 
 ## Repo layout
 
-The Xcode project lives in a `Vox/` subdirectory at the repo root.
+The Xcode project lives in a `Spokium/` subdirectory at the repo root.
 
 ```
-vox-macos/
+spokium-macos/
 ├── README.md
 ├── AGENTS.md
 ├── .gitignore
-└── Vox/
-    ├── Vox.xcodeproj/
+└── Spokium/
+    ├── Spokium.xcodeproj/
     ├── Frameworks/
     │   └── whisper.xcframework     # gitignored, built from source
-    └── Vox/
-        ├── App/                    # VoxApp entry point, AppDelegate, RecordingController,
+    └── Spokium/
+        ├── App/                    # SpokiumApp entry point, AppDelegate, RecordingController,
         │                           #   RecordingOverlay, MenuBarIcon
         ├── Audio/                  # AudioRecorder (AVAudioEngine capture),
         │                           #   AudioDevices (CoreAudio input device enumeration)
@@ -133,7 +133,7 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. The app nev
 - **Sandbox container paths** — every path must resolve through `FileManager` APIs, never hard-coded.
 - **Swift 6 strict concurrency** — whisper C pointers need `nonisolated(unsafe)` and `@unchecked Sendable` wrappers. AVFAudio imports need `@preconcurrency`. Audio tap closures must not capture `@MainActor`-isolated `self` (use standalone `@unchecked Sendable` flag objects instead).
 - **Clean shutdown** — whisper Metal residency sets must be freed before C++ global destructors run. `applicationShouldTerminate` with `.terminateLater` calls `Transcriber.unload()` first.
-- **Model directory migration** — old path was `whisper-macos/models`, now `vox-macos/models`. `ModelLocator.migrateFromOldDirectory()` runs on launch.
+- **Model directory migration** — old paths were `whisper-macos/models` and `vox-macos/models`, now `Spokium/models`. `ModelLocator.migrateFromOldDirectory()` runs on launch.
 
 ## UserDefaults keys
 

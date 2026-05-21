@@ -1,4 +1,4 @@
-# vox-macos
+# spokium-macos
 
 A small, native macOS dictation helper. Tap a global keyboard shortcut to start recording, tap again to stop — the transcribed text is pasted into whatever window is focused. Powered by [whisper.cpp](https://github.com/ggml-org/whisper.cpp) running fully on-device.
 
@@ -75,7 +75,7 @@ User-granted permissions (prompted at first use, not at install):
 
 - **Paragraph splitting** — detects silence from the actual audio samples using RMS energy analysis in 50ms windows. A silence gap above the configurable threshold (default 1.5s) inserts a paragraph break between whisper segments.
 - **Custom dictionary** — bias recognition via whisper's `initial_prompt`. The user's custom names/spellings are concatenated into the prompt so the model is more likely to produce them. (No post-processing find/replace in v1.)
-- **Model storage** — no bundled model. The app downloads models on demand into `~/Library/Application Support/vox-macos/models/`. Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
+- **Model storage** — no bundled model. The app downloads models on demand into `~/Library/Application Support/Spokium/models/`. Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
 - **Download validation** — HTTP status code, GGML format magic bytes, and SHA-1 checksum verification before accepting a downloaded model.
 - **Output options** — auto-paste (default on) and clipboard restore (default on) are independently configurable. With auto-paste off, text is placed on the clipboard only.
 - **Snippets** — post-transcription find/replace. User-defined trigger phrases are matched against the transcript with case-insensitive whole-word matching, replaced before paste.
@@ -83,7 +83,7 @@ User-granted permissions (prompted at first use, not at install):
 
 ## Initial Xcode project setup
 
-These settings must be applied to the Vox target on a fresh checkout (they live in `Vox.xcodeproj` once set, but a freshly-generated Xcode project will not have them):
+These settings must be applied to the Spokium target on a fresh checkout (they live in `Spokium.xcodeproj` once set, but a freshly-generated Xcode project will not have them):
 
 | Where | Setting | Value |
 |---|---|---|
@@ -91,13 +91,13 @@ These settings must be applied to the Vox target on a fresh checkout (they live 
 | Signing & Capabilities → App Sandbox | Audio Input | ✓ |
 | Signing & Capabilities → App Sandbox | Outgoing Connections (Client) | ✓ |
 | Build Settings | `INFOPLIST_KEY_LSUIElement` | **YES** (no dock icon) |
-| Build Settings | `INFOPLIST_KEY_NSMicrophoneUsageDescription` | `"Vox records audio to transcribe your dictation locally."` |
+| Build Settings | `INFOPLIST_KEY_NSMicrophoneUsageDescription` | `"Spokium records audio to transcribe your dictation locally."` |
 | Build Settings | `Swift Language Version` | **6.0** |
 | Build Settings | `Default Actor Isolation` | **MainActor** |
 | Signing & Capabilities | Hardened Runtime | ✓ (required for notarization) |
 
 SPM dependency to add (File → Add Package Dependencies):
-- `https://github.com/sindresorhus/KeyboardShortcuts` — global hotkey support, attached to the Vox target
+- `https://github.com/sindresorhus/KeyboardShortcuts` — global hotkey support, attached to the Spokium target
 
 Framework to add: see § *Building from source* below.
 
@@ -120,13 +120,13 @@ The Xcode project depends on a `whisper.xcframework` that is **not committed** t
 3. **Copy the result into this project:**
    ```sh
    cp -R ~/Codeplace/whisper.cpp/build-apple/whisper.xcframework \
-         ~/Codeplace/vox-macos/Vox/Frameworks/
+         ~/Codeplace/spokium-macos/Spokium/Frameworks/
    ```
    *(Adjust source path if `build-xcframework.sh` writes the framework elsewhere — `find ~/Codeplace/whisper.cpp -name whisper.xcframework -type d` will tell you.)*
 
 4. **Add it to the Xcode target** (only needed on the first setup — once the project file references it, this step is skipped on future rebuilds):
-   - Drag `Vox/Frameworks/whisper.xcframework` from Finder onto the **Vox** project icon in Xcode's project navigator.
-   - Uncheck **Copy items if needed**, ensure **Vox** target is selected, click **Finish**.
+   - Drag `Spokium/Frameworks/whisper.xcframework` from Finder onto the **Spokium** project icon in Xcode's project navigator.
+   - Uncheck **Copy items if needed**, ensure **Spokium** target is selected, click **Finish**.
    - Target → **General** → **Frameworks, Libraries, and Embedded Content** → set the framework's mode to **Embed & Sign**.
 
 5. **Build & run** (⌘R).
@@ -137,7 +137,7 @@ The Xcode project depends on a `whisper.xcframework` that is **not committed** t
 cd ~/Codeplace/whisper.cpp
 git pull
 ./build-xcframework.sh
-cp -R build-apple/whisper.xcframework ~/Codeplace/vox-macos/Vox/Frameworks/
+cp -R build-apple/whisper.xcframework ~/Codeplace/spokium-macos/Spokium/Frameworks/
 ```
 
 Xcode picks up the updated framework on next build.
