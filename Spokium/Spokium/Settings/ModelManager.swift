@@ -180,23 +180,34 @@ final class ModelManager {
     func verifyDownloaded() {
         guard verification != .running else { return }
         verification = .running
-        let toCheck: [(displayName: String, url: URL, sha1: String)] = WhisperModel.all
-            .filter { downloadedNames.contains($0.name) }
-            .map { ($0.displayName, $0.localURL, $0.expectedSHA1) }
+        let toCheck: [(name: String, displayName: String, url: URL, sha1: String)] = WhisperModel.all
+            .filter { FileManager.default.fileExists(atPath: $0.localURL.path) }
+            .map { ($0.name, $0.displayName, $0.localURL, $0.expectedSHA1) }
         Task.detached { [weak self] in
             var passed: [String] = []
+            var passedNames: [String] = []
             var failed: [String] = []
+            var failedNames: [String] = []
             for entry in toCheck {
                 do {
                     try WhisperModel.validateFile(at: entry.url, expectedSHA1: entry.sha1)
                     passed.append(entry.displayName)
+                    passedNames.append(entry.name)
                 } catch {
                     failed.append(entry.displayName)
+                    failedNames.append(entry.name)
                 }
             }
             await MainActor.run { [weak self] in
-                self?.verification = .finished(passed: passed, failed: failed)
-                self?.logger.info("Verification finished: \(passed.count) passed, \(failed.count) failed")
+                guard let self else { return }
+                for name in passedNames {
+                    self.downloadedNames.insert(name)
+                }
+                for name in failedNames {
+                    self.downloadedNames.remove(name)
+                }
+                self.verification = .finished(passed: passed, failed: failed)
+                self.logger.info("Verification finished: \(passed.count) passed, \(failed.count) failed")
             }
         }
     }

@@ -7,6 +7,7 @@ enum OverlayMode: Equatable {
     case pasted
     case copied
     case empty
+    case failed(String)
 }
 
 @MainActor
@@ -67,14 +68,24 @@ final class RecordingOverlay {
 
     func showFeedback(_ feedback: CompletionFeedback, controller: RecordingController) {
         let mode: OverlayMode
+        let duration: Int
         switch feedback {
-        case .pasted: mode = .pasted
-        case .copied: mode = .copied
-        case .empty: mode = .empty
+        case .pasted:
+            mode = .pasted
+            duration = 1800
+        case .copied:
+            mode = .copied
+            duration = 1800
+        case .empty:
+            mode = .empty
+            duration = 1800
+        case .failed(let message):
+            mode = .failed(message)
+            duration = 2400
         }
         show(mode: mode, controller: controller)
         feedbackHideTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(1200))
+            try? await Task.sleep(for: .milliseconds(duration))
             guard !Task.isCancelled else { return }
             self?.hide()
         }
@@ -127,6 +138,12 @@ private struct OverlayContentView: View {
                         .foregroundStyle(.secondary)
                         .font(.system(size: 20, weight: .medium))
                     Text("No speech detected")
+                        .font(.system(size: 18, weight: .medium))
+                case .failed(let message):
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.system(size: 20, weight: .medium))
+                    Text(message)
                         .font(.system(size: 18, weight: .medium))
                 }
             }

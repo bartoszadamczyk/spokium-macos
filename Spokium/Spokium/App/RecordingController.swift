@@ -34,6 +34,7 @@ enum CompletionFeedback: Equatable {
     case pasted
     case copied
     case empty
+    case failed(String)
 }
 
 @Observable
@@ -291,7 +292,8 @@ final class RecordingController {
                 lastCompletion = .copied
                 RecordingSounds.playPaste()
             case .failedNoAccessibility:
-                reportError(.noAccessibility)
+                lastCompletion = .failed("Accessibility permission needed")
+                persistentError = .noAccessibility
                 Paster.requestAccessibilityPermission()
             }
         } catch TranscriberError.cancelled {

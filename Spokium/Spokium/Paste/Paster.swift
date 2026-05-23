@@ -19,6 +19,7 @@ enum Paster {
 
         if autoPaste && !hasAccessibilityPermission() {
             _ = writeToPasteboard(pasteboard, text: text)
+            triggerAccessibilityPrompt()
             logger.error("Auto-paste blocked — Accessibility permission missing; text left on clipboard")
             return .failedNoAccessibility
         }
@@ -50,9 +51,20 @@ enum Paster {
     }
 
     static func requestAccessibilityPermission() {
-        AXIsProcessTrustedWithOptions(
-            ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        )
+        triggerAccessibilityPrompt()
+    }
+
+    // AXIsProcessTrustedWithOptions(prompt: true) is silently ignored by TCC
+    // on modern macOS ("Service kTCCServiceAccessibility does not allow prompting").
+    // What actually surfaces the "<App> would like to control this computer"
+    // alert and adds the app to Privacy & Security > Accessibility is an
+    // attempt to post a synthetic event via CGEvent.post — TCC then publishes
+    // a Modify event for kTCCServicePostEvent and launches universalAccessAuthWarn.
+    // A null CGEvent is posted so we don't synthesize a real keystroke.
+    private static func triggerAccessibilityPrompt() {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(source: source) else { return }
+        event.post(tap: .cghidEventTap)
     }
 
     static func openAccessibilitySettings() {

@@ -201,10 +201,6 @@ private struct ModelTab: View {
         )
     }
 
-    private var hasDownloads: Bool {
-        !modelManager.downloadedNames.isEmpty
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             List {
@@ -222,14 +218,12 @@ private struct ModelTab: View {
                 .buttonStyle(.link)
                 .font(.callout)
 
-                if hasDownloads {
-                    Button(verifyButtonLabel) {
-                        modelManager.verifyDownloaded()
-                    }
-                    .buttonStyle(.link)
-                    .font(.callout)
-                    .disabled(modelManager.verification == .running)
+                Button(verifyButtonLabel) {
+                    modelManager.verifyDownloaded()
                 }
+                .buttonStyle(.link)
+                .font(.callout)
+                .disabled(modelManager.verification == .running)
 
                 if case .finished(let passed, let failed) = modelManager.verification {
                     Text(verificationSummary(passed: passed, failed: failed))
@@ -256,6 +250,9 @@ private struct ModelTab: View {
     }
 
     private func verificationSummary(passed: [String], failed: [String]) -> String {
+        if passed.isEmpty && failed.isEmpty {
+            return "No models found in directory"
+        }
         if failed.isEmpty {
             return "All \(passed.count) verified"
         }
