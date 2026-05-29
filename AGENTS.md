@@ -13,7 +13,7 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 - **Min target:** macOS 26.3. Required for `NSHostingSceneRepresentation` used to open Settings from AppKit menu bar code.
 - **Sandboxed.** The app runs under App Sandbox. Accessibility-driven ⌘V, global hotkeys, and microphone all work in sandbox once the user grants the relevant permissions.
 - **IDE:** Xcode. The project is an Xcode app target, not a SwiftPM executable, because we need an `.app` bundle, `Info.plist`, entitlements, and a menu-bar `LSUIElement` flag.
-- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via a locally-built XCFramework. The user clones `whisper.cpp` next to this repo, runs `./build-xcframework.sh`, and copies the resulting `whisper.xcframework` into `Spokium/Frameworks/`. The framework is gitignored. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Spokium`, so no collision. Models downloaded at runtime, not bundled.
+- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via `Spokium/Frameworks/whisper.xcframework`. In this checkout the XCFramework is present and tracked in Git, but it is still a rebuildable artifact from upstream `whisper.cpp`. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Spokium`, so no collision. Models downloaded at runtime, not bundled.
 - **Global hotkey:** [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) SPM package (v2.4.0+). Wraps Carbon `RegisterEventHotKey` and gives us a SwiftUI recorder view for the settings screen. Default: ⌥Space. Supports toggle mode (default) or push-to-record (`onKeyDown` starts, `onKeyUp` stops) via `pushToRecord` UserDefaults flag.
 - **Audio capture:** `AVAudioEngine` with input node tap, writing native-rate CAF to temp directory. Supports user-selectable input device via CoreAudio `AudioUnitSetProperty` (stored as device UID in UserDefaults). Resampled to 16 kHz mono Float32 by `AudioLoader` before transcription.
 - **Paste mechanism:** write to `NSPasteboard.general`, synthesize ⌘V via `CGEvent` (key code 9), optionally restore previous pasteboard contents after 150ms delay. Both auto-paste and clipboard restore are user-configurable.
@@ -23,12 +23,12 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 
 - **No network calls** for transcription or telemetry. Model downloads from Hugging Face are the only allowed network use.
 - **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count).
-- **No dock icon ever.** `LSUIElement = true` in `Info.plist`. The app stays in `.accessory` activation policy permanently — Settings windows are brought to front via `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` without switching to `.regular`.
+- **No dock icon ever.** `LSUIElement = true` is set through generated Info.plist build settings. Settings windows are brought to front via `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront`; do not switch the app to `.regular`.
 - **Restore the pasteboard** after pasting so we don't clobber whatever the user had copied (when enabled in settings).
 
 ## Entitlements
 
-The app is sandboxed. The following entitlements are set on the target:
+The app is sandboxed. Entitlements are generated from the Xcode target's Signing & Capabilities build settings; there is currently no checked-in `.entitlements` file. The following entitlements are set on the target:
 
 | Entitlement | Required for |
 |---|---|
@@ -62,7 +62,7 @@ spokium-macos/
 └── Spokium/
     ├── Spokium.xcodeproj/
     ├── Frameworks/
-    │   └── whisper.xcframework     # gitignored, built from source
+    │   └── whisper.xcframework     # tracked in this checkout, rebuildable from whisper.cpp
     └── Spokium/
         ├── App/                    # SpokiumApp entry point, AppDelegate, RecordingController,
         │                           #   RecordingOverlay, MenuBarIcon
@@ -81,16 +81,16 @@ spokium-macos/
 ## Key implementation details
 
 ### State machine (RecordingController)
-`idle` → `recording` → `finishing` → `idle`. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit. User can cancel at any state via Esc (global `NSEvent.addGlobalMonitorForEvents` while recording or transcribing) or via the menu item.
+`idle` → `starting` → `recording` → `finishing` → `idle`. `starting` prevents double-start races while microphone/audio setup is in flight. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit, but quit cleanup still needs a direct `transcriber?.abort()` call and active-recorder stop/delete handling. User can cancel at any state via Esc (global `NSEvent.addGlobalMonitorForEvents` while recording or transcribing) or via the menu item.
 
 ### Cancel during transcription
-`Transcriber` exposes a nonisolated `abort()` method that flips a `nonisolated(unsafe) Bool` flag inside an `@unchecked Sendable` wrapper. The flag's pointer is passed to whisper via `params.abort_callback_user_data` with a `@convention(c)` callback that reads the bool. Whisper polls this between graph computations and exits early, so cancellation actually halts inference instead of just discarding the result. `Transcriber.transcribe(...)` throws `TranscriberError.cancelled` when the flag was set, which `RecordingController` catches silently.
+`Transcriber` exposes a nonisolated `abort()` method that flips an `Atomic<Bool>` inside a small `Sendable` wrapper. The flag's pointer is passed to whisper via `params.abort_callback_user_data`; the C callback reads the bool. Whisper polls this between graph computations and exits early, so cancellation actually halts inference instead of just discarding the result. `Transcriber.transcribe(...)` throws `TranscriberError.cancelled` when the flag was set, which `RecordingController` catches silently.
 
 ### Auto-stop after time limit
 `RecordingController.startAutoStopTask()` schedules a `Task` that sleeps for `maxRecordingMinutes` (UserDefaults, default 10 min, 0 = no limit) then calls `stop()`. Cancelled when the user manually stops, cancels, or push-to-record releases.
 
 ### Audio level meter
-`AudioRecorder` computes per-buffer RMS in the tap closure and writes it to a `@unchecked Sendable` `AudioLevelMeter` wrapper (similar pattern to `WriteErrorFlag`). `RecordingController` polls it on a 50 ms `Timer` during recording, exposing a smoothed `inputLevel: Float` (`@Observable`). `RecordingOverlay` displays this as a SwiftUI mic icon whose red fill is masked from the bottom up based on the normalized level (scaled 8x since speech RMS sits around 0.02–0.10).
+`AudioRecorder` computes per-buffer RMS in the tap closure and writes it to a small `Sendable` `AudioLevelMeter` backed by `Synchronization.Atomic`. `RecordingController` polls it on a 50 ms `Timer` during recording, exposing a smoothed `inputLevel: Float` (`@Observable`). `RecordingOverlay` displays this as a SwiftUI mic icon whose red fill is masked from the bottom up based on the normalized level.
 
 ### Transcriber (actor)
 Wraps whisper.cpp C API. Lazy-loads model context with GPU enabled (falls back to CPU if GPU init fails). Caches context across transcriptions (unloaded on app quit via `applicationShouldTerminate` → `.terminateLater` pattern). Whisper logs are suppressed via `whisper_log_set` no-op callback. Also exposes `tokenCount(for:)` for dictionary token budget display.
@@ -114,7 +114,15 @@ Operates on the 16kHz Float32 samples in 50ms windows. Computes RMS energy per w
 `NSPanel` with `.borderless` + `.nonactivatingPanel` style, `.floating` level, `ignoresMouseEvents`. Positioned at 1/3 from bottom of screen. Recording state shows the level-driven mic icon (see above) plus a "Recording" label. Transcribing state shows a `ProgressView` spinner with "Transcribing…".
 
 ### Settings window lifecycle
-Opens via `NSHostingSceneRepresentation.environment.openSettings()`. The app never leaves `.accessory` policy; `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` is enough to bring the window to front. No dock icon ever appears.
+Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` brings the window to front while `LSUIElement` keeps the app out of the Dock.
+
+### Current architecture gaps to preserve in recommendations
+- No test target exists.
+- Defaults keys are still stringly typed in multiple files.
+- `SettingsView.swift` currently contains all tabs and helper views in one file.
+- `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
+- The app cannot start a second recording while `finishing`; solving that needs a transcription queue.
+- The app cannot change input devices mid-recording; solving that safely needs segmented recordings.
 
 ## Conventions
 
@@ -129,11 +137,11 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. The app nev
 - **Microphone permission** is requested on first recording via `AVCaptureDevice.requestAccess`.
 - **Pasteboard restore timing** — restoring too quickly means the ⌘V pastes the *old* contents. 150ms delay after keystroke. Change count is captured right after write (not after the sleep) to avoid clobbering clipboard changes from other apps.
 - **Whisper sample rate** — whisper.cpp requires 16 kHz mono Float32. `AudioLoader` resamples from the device's native format.
-- **Menu bar app lifecycle** — `LSUIElement` apps need explicit window management. Settings uses `NSHostingSceneRepresentation` + `NSApp.activate(ignoringOtherApps: true)` while staying in `.accessory` policy (so no dock icon flashes).
+- **Menu bar app lifecycle** — `LSUIElement` apps need explicit window management. Settings uses `NSHostingSceneRepresentation` + `NSApp.activate(ignoringOtherApps: true)` and must not switch to `.regular` activation policy.
 - **Sandbox container paths** — every path must resolve through `FileManager` APIs, never hard-coded.
-- **Swift 6 strict concurrency** — whisper C pointers need `nonisolated(unsafe)` and `@unchecked Sendable` wrappers. AVFAudio imports need `@preconcurrency`. Audio tap closures must not capture `@MainActor`-isolated `self` (use standalone `@unchecked Sendable` flag objects instead).
-- **Clean shutdown** — whisper Metal residency sets must be freed before C++ global destructors run. `applicationShouldTerminate` with `.terminateLater` calls `Transcriber.unload()` first.
-- **Model directory migration** — old paths were `whisper-macos/models` and `vox-macos/models`, now `Spokium/models`. `ModelLocator.migrateFromOldDirectory()` runs on launch.
+- **Swift 6 strict concurrency** — whisper C pointers need careful isolation, `nonisolated(unsafe)` wrappers, or atomic `Sendable` state. AVFAudio imports need `@preconcurrency`. Audio tap closures must not capture `@MainActor`-isolated `self`; use standalone flag/meter objects instead.
+- **Clean shutdown** — whisper Metal residency sets must be freed before C++ global destructors run. `applicationShouldTerminate` with `.terminateLater` calls `RecordingController.cleanup()`, which unloads the transcriber. Direct whisper abort on quit is still a known gap.
+- **Model directory migration** — old paths were `spokium-macos/models`, `whisper-macos/models`, and `vox-macos/models`; now `Spokium/models`. `ModelLocator.migrateFromOldDirectory()` runs on launch.
 
 ## UserDefaults keys
 
@@ -148,6 +156,7 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. The app nev
 | `selectedModel` | String | (auto) | ModelManager |
 | `selectedInputDevice` | String | `""` | AppDelegate menu, AudioRecorder, GeneralTab |
 | `pushToRecord` | Bool | `false` | GeneralTab, RecordingController |
+| `playSounds` | Bool | `false` | GeneralTab, RecordingSounds |
 | `snippets` | Data | `[]` (JSON) | SnippetsTab, SnippetStore (applied in RecordingController) |
 | `maxRecordingMinutes` | Double | `10` | TranscriptionTab, RecordingController auto-stop (0 = no limit) |
 

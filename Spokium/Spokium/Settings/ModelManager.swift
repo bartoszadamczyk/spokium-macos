@@ -134,6 +134,7 @@ enum ModelValidationError: LocalizedError {
 final class ModelManager {
     private(set) var downloads: [String: Double] = [:]
     private(set) var downloadedNames: Set<String>
+    private(set) var failedVerificationNames: Set<String> = []
     private(set) var lastDownloadError: String?
     private(set) var verification: VerificationState = .idle
 
@@ -166,7 +167,19 @@ final class ModelManager {
            downloadedNames.contains(model.name) {
             return model.localURL
         }
-        return ModelLocator.defaultModel()
+        return nil
+    }
+
+    func refreshDownloadedNames() {
+        let onDisk = Set(
+            WhisperModel.all.filter {
+                FileManager.default.fileExists(atPath: $0.localURL.path)
+            }.map(\.name)
+        )
+        let missing = downloadedNames.subtracting(onDisk)
+        for name in missing {
+            downloadedNames.remove(name)
+        }
     }
 
     func dismissDownloadError() {
@@ -188,6 +201,7 @@ final class ModelManager {
             var passedNames: [String] = []
             var failed: [String] = []
             var failedNames: [String] = []
+            var failedURLs: [URL] = []
             for entry in toCheck {
                 do {
                     try WhisperModel.validateFile(at: entry.url, expectedSHA1: entry.sha1)
@@ -196,15 +210,21 @@ final class ModelManager {
                 } catch {
                     failed.append(entry.displayName)
                     failedNames.append(entry.name)
+                    failedURLs.append(entry.url)
                 }
+            }
+            for url in failedURLs {
+                try? FileManager.default.removeItem(at: url)
             }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 for name in passedNames {
                     self.downloadedNames.insert(name)
+                    self.failedVerificationNames.remove(name)
                 }
                 for name in failedNames {
                     self.downloadedNames.remove(name)
+                    self.failedVerificationNames.insert(name)
                 }
                 self.verification = .finished(passed: passed, failed: failed)
                 self.logger.info("Verification finished: \(passed.count) passed, \(failed.count) failed")
@@ -214,6 +234,7 @@ final class ModelManager {
 
     func download(_ model: WhisperModel) {
         guard activeTasks[model.name] == nil else { return }
+        failedVerificationNames.remove(model.name)
         activeTasks[model.name] = Task {
             await performDownload(model)
             activeTasks[model.name] = nil
@@ -231,6 +252,7 @@ final class ModelManager {
     func delete(_ model: WhisperModel) {
         try? FileManager.default.removeItem(at: model.localURL)
         downloadedNames.remove(model.name)
+        failedVerificationNames.remove(model.name)
         if selectedModelName == model.name {
             let autoName = WhisperModel.all.first { downloadedNames.contains($0.name) }?.name ?? "base"
             selectedModelName = autoName

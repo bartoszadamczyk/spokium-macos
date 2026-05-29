@@ -27,6 +27,16 @@ struct AudioInputDevice: Equatable {
     }
 
     static func defaultInputName() -> String? {
+        guard let id = defaultInputDeviceID() else { return nil }
+        return stringProperty(kAudioObjectPropertyName, of: id)
+    }
+
+    static func defaultInputUID() -> String? {
+        guard let id = defaultInputDeviceID() else { return nil }
+        return stringProperty(kAudioDevicePropertyDeviceUID, of: id)
+    }
+
+    private static func defaultInputDeviceID() -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -37,7 +47,7 @@ struct AudioInputDevice: Equatable {
         guard AudioObjectGetPropertyData(
             AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID
         ) == noErr else { return nil }
-        return stringProperty(kAudioObjectPropertyName, of: deviceID)
+        return deviceID
     }
 
     private static func deviceFromID(_ id: AudioDeviceID) -> AudioInputDevice? {

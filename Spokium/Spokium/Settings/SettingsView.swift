@@ -41,6 +41,7 @@ private struct GeneralTab: View {
     @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
     @AppStorage("pushToRecord") private var pushToRecord = false
     @AppStorage("playSounds") private var playSounds = false
+    @AppStorage("autoSplitMinutes") private var autoSplitMinutes: Double = 5
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
@@ -72,7 +73,22 @@ private struct GeneralTab: View {
                         }
                     }
                 }
-                .disabled(controller.state != .idle)
+                .disabled(controller.state == .starting || controller.state == .finishing)
+                .onChange(of: selectedInputDevice) { _, newUID in
+                    // Trigger seamless device handoff when changed mid-recording
+                    controller.switchInputDevice(uid: newUID)
+                }
+                Picker("Auto-split every:", selection: $autoSplitMinutes) {
+                    Text("Off").tag(0.0)
+                    Text("1 min").tag(1.0)
+                    Text("2 min").tag(2.0)
+                    Text("3 min").tag(3.0)
+                    Text("5 min").tag(5.0)
+                    Text("10 min").tag(10.0)
+                    Text("15 min").tag(15.0)
+                    Text("20 min").tag(20.0)
+                    Text("30 min").tag(30.0)
+                }
                 Toggle("Play sound effects", isOn: $playSounds)
             }
         }
@@ -238,6 +254,7 @@ private struct ModelTab: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
+        .task { modelManager.refreshDownloadedNames() }
         .alert("Download Failed", isPresented: showError) {
             Button("OK") { modelManager.dismissDownloadError() }
         } message: {
@@ -309,6 +326,11 @@ private struct ModelRow: View {
     @Bindable var manager: ModelManager
     @Environment(RecordingController.self) private var controller
     @Environment(\.controlActiveState) private var controlActiveState
+    @State private var perfRecord: ModelPerformanceStore.Record?
+
+    private var modelStem: String {
+        URL(fileURLWithPath: model.fileName).deletingPathExtension().lastPathComponent
+    }
 
     var body: some View {
         HStack {
@@ -323,6 +345,17 @@ private struct ModelRow: View {
                 Text(model.qualityNote)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let perf = perfRecord {
+                    Text(perf.summary)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .onAppear { perfRecord = ModelPerformanceStore.read(modelStem: modelStem) }
+            .onChange(of: controller.state) { _, newState in
+                if newState == .idle {
+                    perfRecord = ModelPerformanceStore.read(modelStem: modelStem)
+                }
             }
 
             Spacer()
@@ -358,6 +391,11 @@ private struct ModelRow: View {
                     .buttonStyle(.plain)
                     .disabled(manager.selectedModelName == model.name && controller.state != .idle)
                 }
+            } else if manager.failedVerificationNames.contains(model.name) {
+                Button("Redownload") {
+                    manager.download(model)
+                }
+                .foregroundStyle(.red)
             } else {
                 Button("Download") {
                     manager.download(model)

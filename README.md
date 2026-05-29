@@ -13,7 +13,7 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 - **Live audio level meter.** Recording overlay shows a microphone icon that fills red from the bottom up based on input volume — instant feedback that the mic is working.
 - **Cancel anytime.** Press Esc (or menu item) to discard a recording or abort an in-flight transcription. Whisper's abort callback is wired up, so cancelling during inference actually stops compute.
 - **Auto-stop after time limit.** Configurable maximum recording duration (default 10 min) prevents accidentally leaving the hotkey on forever.
-- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, auto-stop after N minutes, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
+- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, sound effects, auto-stop after N minutes, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
 - **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 1.5s) and inserts paragraph breaks so pasted output keeps structure.
 - **Pastes into the active window.** Uses the system pasteboard + a synthesized ⌘V. Optionally restores previous clipboard contents after paste. Can also be set to clipboard-only mode (no auto-paste).
 - **Paste feedback overlay.** After transcription the HUD briefly confirms the outcome — "Pasted" when auto-paste fires, "Copied to clipboard" when auto-paste is off, and "No speech detected" (with a soft chime) when the transcript came back empty. No transcript content is stored.
@@ -60,7 +60,7 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 
 ## Sandbox & permissions
 
-The app runs under App Sandbox. Required entitlements:
+The app runs under App Sandbox. Entitlements are generated from the Xcode target's Signing & Capabilities build settings, not from a checked-in `.entitlements` file. Required entitlements:
 
 - `com.apple.security.app-sandbox`
 - `com.apple.security.device.audio-input` — microphone
@@ -74,8 +74,8 @@ User-granted permissions (prompted at first use, not at install):
 ## Decisions
 
 - **Paragraph splitting** — detects silence from the actual audio samples using RMS energy analysis in 50ms windows. A silence gap above the configurable threshold (default 1.5s) inserts a paragraph break between whisper segments.
-- **Custom dictionary** — bias recognition via whisper's `initial_prompt`. The user's custom names/spellings are concatenated into the prompt so the model is more likely to produce them. (No post-processing find/replace in v1.)
-- **Model storage** — no bundled model. The app downloads models on demand into `~/Library/Application Support/Spokium/models/`. Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
+- **Custom dictionary** — bias recognition via whisper's `initial_prompt`. The user's custom names/spellings are concatenated into the prompt so the model is more likely to produce them. Dictionary entries are not find/replace rules; snippets handle post-transcription replacement.
+- **Model storage** — no bundled model. The app downloads models on demand into the user Application Support directory, under `Spokium/models` as resolved by `FileManager` (inside the sandbox container for sandboxed builds). Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
 - **Download validation** — HTTP status code, GGML format magic bytes, and SHA-1 checksum verification before accepting a downloaded model.
 - **Output options** — auto-paste (default on) and clipboard restore (default on) are independently configurable. With auto-paste off, text is placed on the clipboard only.
 - **Snippets** — post-transcription find/replace. User-defined trigger phrases are matched against the transcript with case-insensitive whole-word matching, replaced before paste.
@@ -101,9 +101,18 @@ SPM dependency to add (File → Add Package Dependencies):
 
 Framework to add: see § *Building from source* below.
 
+## Learning docs
+
+The `docs/` directory is a local learning companion for this app. Start with:
+
+- `docs/README.md` for the learning path.
+- `docs/swift-code-tour.md` for a code walkthrough.
+- `docs/macos-swift-learning-guide.md` for Swift/macOS concepts mapped to this repo.
+- `docs/code-audit-map.md` and `docs/validation-guide.md` for security and behavior checks.
+
 ## Building from source
 
-The Xcode project depends on a `whisper.xcframework` that is **not committed** to this repo (~50–100 MB binary, gitignored). You build it yourself from the upstream `whisper.cpp` repo. One-time setup:
+The Xcode project links `Spokium/Frameworks/whisper.xcframework`. In this checkout the framework is present and tracked, but it is still treated as a rebuildable artifact from upstream `whisper.cpp`. If the framework is missing, stale, or you want to verify provenance, rebuild it from source:
 
 1. **Clone whisper.cpp as a sibling of this repo:**
    ```sh
@@ -124,7 +133,7 @@ The Xcode project depends on a `whisper.xcframework` that is **not committed** t
    ```
    *(Adjust source path if `build-xcframework.sh` writes the framework elsewhere — `find ~/Codeplace/whisper.cpp -name whisper.xcframework -type d` will tell you.)*
 
-4. **Add it to the Xcode target** (only needed on the first setup — once the project file references it, this step is skipped on future rebuilds):
+4. **Verify it is attached to the Xcode target** (the project currently references it already; this is only needed if you recreate the project or remove the reference):
    - Drag `Spokium/Frameworks/whisper.xcframework` from Finder onto the **Spokium** project icon in Xcode's project navigator.
    - Uncheck **Copy items if needed**, ensure **Spokium** target is selected, click **Finish**.
    - Target → **General** → **Frameworks, Libraries, and Embedded Content** → set the framework's mode to **Embed & Sign**.
@@ -152,8 +161,8 @@ All core functionality is implemented and working:
 - [x] **Phase 3b** — model picker UI. Settings → Model tab lists 6 models (tiny through large-v3-turbo), downloads from Hugging Face with progress bar, validates with SHA-1 checksums and GGML magic bytes. "Show in Finder" button for manual model management.
 - [x] **Phase 4** — paste pipeline. Save current pasteboard, write transcript, synthesize ⌘V via `CGEvent`, optionally restore previous pasteboard after 150ms. Configurable auto-paste and clipboard restore settings.
 - [x] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` with real token counting (224 max). Paragraph splitting via RMS-based silence detection on recorded audio (configurable threshold). User-defined snippets find/replace after transcription.
-- [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD with live audio level meter (mic icon fills red bottom-up) and brief pasted / copied / no-speech-detected confirmation, cancel-anytime via Esc or menu (uses whisper's abort callback for true mid-flight interruption), auto-stop after configurable time limit, error alerts plus a persistent error row in the status menu (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing) with a one-shot "Turn Off Auto-paste" remediation for paste failures, Accessibility-permission preflight in Settings and before each ⌘V synth, launch at login, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration. App stays in `.accessory` activation policy permanently so no dock icon ever appears.
-- [x] **Phase 7** — distribution. Signed with Developer ID, notarized via Apple, Hardened Runtime enabled.
+- [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD with live audio level meter (mic icon fills red bottom-up) and brief pasted / copied / no-speech-detected confirmation, cancel-anytime via Esc or menu (uses whisper's abort callback for true mid-flight interruption), auto-stop after configurable time limit, error alerts plus a persistent error row in the status menu (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing) with a one-shot "Turn Off Auto-paste" remediation for paste failures, Accessibility-permission preflight in Settings and before each ⌘V synth, launch at login, sound effects, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration. `LSUIElement` stays enabled so no Dock icon appears.
+- [x] **Phase 7** — distribution scripts. `scripts/release.sh` archives, exports with `method = developer-id`, submits to Apple notarization, staples the app, writes `dist/<version>/`, and installs to `/Applications`. Hardened Runtime is enabled in the target build settings.
 
 ### Settings (UserDefaults keys)
 
@@ -168,5 +177,6 @@ All core functionality is implemented and working:
 | `selectedModel` | String | (auto) | Name of the selected whisper model |
 | `selectedInputDevice` | String | `""` | Audio input device UID (empty = system default) |
 | `pushToRecord` | Bool | `false` | If true, hold shortcut to record instead of toggle |
+| `playSounds` | Bool | `false` | Play system sound effects for recording start, paste/copy, and empty result |
 | `snippets` | Data (JSON) | `[]` | Array of `{id, trigger, replacement}` for find/replace |
 | `maxRecordingMinutes` | Double | `10` | Auto-stop recording after N minutes (0 = no limit) |

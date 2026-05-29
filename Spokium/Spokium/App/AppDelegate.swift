@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var toggleMenuItem: NSMenuItem!
     private var cancelMenuItem: NSMenuItem!
+    private var queueStatusItem: NSMenuItem!
     private var inputDeviceMenu: NSMenu!
     private var modelMenu: NSMenu!
     private var errorRowItem: NSMenuItem!
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let recordingOverlay = RecordingOverlay()
     private var pulseTimer: Timer?
     private var pulseOn = true
+    private var queueStatusTimer: Timer?
 
     private let settingsScene = NSHostingSceneRepresentation {
         Settings {
@@ -28,7 +30,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        ModelLocator.migrateFromOldDirectory()
         cleanStaleTempFiles()
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -123,6 +124,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cancelMenuItem.isHidden = true
         menu.addItem(cancelMenuItem)
 
+        queueStatusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        queueStatusItem.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
+        queueStatusItem.isEnabled = false
+        queueStatusItem.isHidden = true
+        menu.addItem(queueStatusItem)
+
         menu.addItem(.separator())
 
         inputDeviceMenu = NSMenu()
@@ -198,6 +205,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         renderMenuBarIcon(recording: recording)
+        refreshQueueStatus()
+    }
+
+    private func refreshQueueStatus() {
+        guard controller.state != .idle else {
+            queueStatusItem.isHidden = true
+            queueStatusItem.title = ""
+            return
+        }
+
+        var parts: [String] = []
+
+        let isRecording = controller.state == .recording || controller.state == .starting
+        if isRecording {
+            parts.append("Recording \(formatSeconds(controller.recordingAudioSeconds))")
+        }
+
+        if let eta = controller.transcriptionEstimateSeconds {
+            parts.append("Transcribing ~\(formatSeconds(eta)) left")
+        } else if controller.queuedTranscriptionCount > 0 {
+            let n = controller.queuedTranscriptionCount
+            parts.append(n == 1 ? "Transcribing" : "Transcribing \(n)")
+        }
+
+        if parts.isEmpty {
+            queueStatusItem.isHidden = true
+            return
+        }
+        queueStatusItem.title = parts.joined(separator: " · ")
+        queueStatusItem.isHidden = false
+    }
+
+    private func formatSeconds(_ value: Double) -> String {
+        let total = max(0, Int(value.rounded()))
+        let minutes = total / 60
+        let seconds = total % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     private func renderMenuBarIcon(recording: Bool) {
@@ -237,6 +281,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshErrorMenu()
         refreshInputDeviceMenu()
         refreshModelMenu()
+        refreshQueueStatus()
+        startQueueStatusTimer()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        stopQueueStatusTimer()
+    }
+
+    private func startQueueStatusTimer() {
+        stopQueueStatusTimer()
+        // Scheduled on .common so it fires during NSEventTrackingRunLoopMode
+        // (the run loop mode used while a menu is open).
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshQueueStatus()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        queueStatusTimer = timer
+    }
+
+    private func stopQueueStatusTimer() {
+        queueStatusTimer?.invalidate()
+        queueStatusTimer = nil
     }
 
     @objc private func disableAutoPaste() {
@@ -369,7 +437,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refreshInputDeviceMenu() {
         inputDeviceMenu.removeAllItems()
         let selectedUID = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
-        let locked = controller.state != .idle
+        // Allow switching device while recording (seamless handoff); lock only during start/finish
+        let locked = controller.state == .starting || controller.state == .finishing
 
         let defaultName = AudioInputDevice.defaultInputName() ?? "Unknown"
         let defaultItem = NSMenuItem(title: "System Default (\(defaultName))", action: #selector(selectInputDevice(_:)), keyEquivalent: "")
@@ -392,10 +461,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             inputDeviceMenu.addItem(item)
         }
     }
-    
+
     @objc private func selectInputDevice(_ sender: NSMenuItem) {
         let uid = sender.representedObject as? String ?? ""
-        UserDefaults.standard.set(uid, forKey: "selectedInputDevice")
+        controller.switchInputDevice(uid: uid)
     }
 
     private func refreshModelMenu() {
