@@ -5,10 +5,10 @@ import SwiftUI
 struct GeneralTab: View {
     @Environment(RecordingController.self) private var controller
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @AppStorage("selectedInputDevice") private var selectedInputDevice = ""
-    @AppStorage("pushToRecord") private var pushToRecord = false
-    @AppStorage("playSounds") private var playSounds = false
-    @AppStorage("autoSplitMinutes") private var autoSplitMinutes: Double = 5
+    @AppStorage(DefaultsKey.selectedInputDevice) private var selectedInputDevice = AppDefaults.selectedInputDeviceDefault
+    @AppStorage(DefaultsKey.pushToRecord) private var pushToRecord = AppDefaults.pushToRecordDefault
+    @AppStorage(DefaultsKey.playSounds) private var playSounds = AppDefaults.playSoundsDefault
+    @AppStorage(DefaultsKey.autoSplitMinutes) private var autoSplitMinutes = AppDefaults.autoSplitMinutesDefault
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 

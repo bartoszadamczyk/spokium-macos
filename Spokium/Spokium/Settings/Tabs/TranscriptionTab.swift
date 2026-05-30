@@ -2,12 +2,12 @@ import SwiftUI
 import whisper
 
 struct TranscriptionTab: View {
-    @AppStorage("selectedLanguage") private var selectedLanguage = "auto"
-    @AppStorage("paragraphSplitting") private var paragraphSplitting = true
-    @AppStorage("silenceThreshold") private var minSilenceDuration = 3.0
-    @AppStorage("autoPaste") private var autoPaste = true
-    @AppStorage("preserveClipboard") private var preserveClipboard = true
-    @AppStorage("maxRecordingMinutes") private var maxRecordingMinutes: Double = 10.0
+    @AppStorage(DefaultsKey.selectedLanguage) private var selectedLanguage = AppDefaults.selectedLanguageDefault
+    @AppStorage(DefaultsKey.paragraphSplitting) private var paragraphSplitting = AppDefaults.paragraphSplittingDefault
+    @AppStorage(DefaultsKey.silenceThreshold) private var minSilenceDuration = AppDefaults.silenceThresholdDefault
+    @AppStorage(DefaultsKey.autoPaste) private var autoPaste = AppDefaults.autoPasteDefault
+    @AppStorage(DefaultsKey.preserveClipboard) private var preserveClipboard = AppDefaults.preserveClipboardDefault
+    @AppStorage(DefaultsKey.maxRecordingMinutes) private var maxRecordingMinutes = AppDefaults.maxRecordingMinutesDefault
 
     var body: some View {
         Form {

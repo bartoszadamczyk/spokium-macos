@@ -94,10 +94,10 @@ extension RecordingController {
         }
 
         // Selected device is likely disconnected. Fall back to system default and try once more.
-        let lostDevice = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
+        let lostDevice = AppDefaults.selectedInputDevice
         if !lostDevice.isEmpty {
             logger.warning("resumeRecordingAfterSplit: selected device unavailable — falling back to system default")
-            UserDefaults.standard.set("", forKey: "selectedInputDevice")
+            AppDefaults.selectedInputDevice = ""
 
             let url = makeTempURL()
             currentRecordingURL = url
@@ -123,8 +123,8 @@ extension RecordingController {
 
     // Switches input device while recording without losing audio.
     func switchInputDevice(uid: String) {
-        let previousUID = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
-        UserDefaults.standard.set(uid, forKey: "selectedInputDevice")
+        let previousUID = AppDefaults.selectedInputDevice
+        AppDefaults.selectedInputDevice = uid
         guard case .recording = state else { return }
 
         // Skip the segment split if the previous and new selections resolve to the

@@ -127,7 +127,6 @@ Operates on the 16kHz Float32 samples in 50ms windows. Computes RMS energy per w
 Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` brings the window to front while `LSUIElement` keeps the app out of the Dock.
 
 ### Current architecture gaps to preserve in recommendations
-- Defaults keys are still stringly typed in multiple files.
 - `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
 - The app cannot start a second recording while `finishing`; solving that needs a transcription queue.
 - The app cannot change input devices mid-recording; solving that safely needs segmented recordings.
@@ -157,6 +156,18 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.acti
 - **Swift 6 strict concurrency** — whisper C pointers need careful isolation, `nonisolated(unsafe)` wrappers, or atomic `Sendable` state. AVFAudio imports need `@preconcurrency`. Audio tap closures must not capture `@MainActor`-isolated `self`; use standalone flag/meter objects instead.
 - **Clean shutdown** — whisper Metal residency sets must be freed before C++ global destructors run. `applicationShouldTerminate` with `.terminateLater` calls `RecordingController.cleanup()`, which unloads the transcriber. Direct whisper abort on quit is still a known gap.
 - **Model directory migration** — old paths were `spokium-macos/models`, `whisper-macos/models`, and `vox-macos/models`; now `Spokium/models`. `ModelLocator.migrateFromOldDirectory()` runs on launch.
+
+## Settings layer (`Spokium/Settings/AppDefaults.swift`)
+
+All persisted settings flow through `AppDefaults` (typed accessors) and `DefaultsKey` (key string constants). Production code uses `AppDefaults.foo` for reads/writes; SwiftUI views use `@AppStorage(DefaultsKey.foo)` with inline `AppDefaults.fooDefault` constants for the fallback. Direct `UserDefaults.standard` usage is limited to `Snippets` and `ModelPerformanceStore`, which own their own JSON-encoded blobs and reference `DefaultsKey.snippets` / `DefaultsKey.modelPerformance` respectively.
+
+When adding a new setting:
+1. Add the key constant to `DefaultsKey` and the default value constant to `AppDefaults`.
+2. Add a get/set computed property on `AppDefaults`.
+3. Use `@AppStorage(DefaultsKey.x) private var ... = AppDefaults.xDefault` in the SwiftUI tab.
+4. Update the table below.
+
+The layer is `nonisolated` so it's callable from any actor context. `UserDefaults` is thread-safe.
 
 ## UserDefaults keys
 

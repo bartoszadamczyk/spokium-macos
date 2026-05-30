@@ -91,7 +91,7 @@ final class RecordingController {
     }
 
     private var isPushToRecord: Bool {
-        UserDefaults.standard.bool(forKey: "pushToRecord")
+        AppDefaults.pushToRecord
     }
 
     private func handleKeyDown() {

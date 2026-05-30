@@ -3,7 +3,7 @@ import AppKit
 extension AppDelegate {
     func refreshInputDeviceMenu() {
         inputDeviceMenu.removeAllItems()
-        let selectedUID = UserDefaults.standard.string(forKey: "selectedInputDevice") ?? ""
+        let selectedUID = AppDefaults.selectedInputDevice
         // Allow switching device while recording (seamless handoff); lock only during start/finish
         let locked = controller.state == .starting || controller.state == .finishing
 

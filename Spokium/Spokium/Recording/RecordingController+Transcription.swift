@@ -244,17 +244,14 @@ extension RecordingController {
     }
 
     private func transcriptionSettings() -> TranscriptionSettings {
-        let defaults = UserDefaults.standard
-        return TranscriptionSettings(
-            language: defaults.string(forKey: "selectedLanguage") ?? "auto",
-            paragraphSplitting: defaults.object(forKey: "paragraphSplitting") as? Bool ?? true,
-            minSilenceDuration: defaults.object(forKey: "silenceThreshold") as? Double ?? 3.0
+        TranscriptionSettings(
+            language: AppDefaults.selectedLanguage,
+            paragraphSplitting: AppDefaults.paragraphSplitting,
+            minSilenceDuration: AppDefaults.silenceThreshold
         )
     }
 
     private func dictionaryPrompt() -> String? {
-        DictionaryPromptBuilder.prompt(
-            from: UserDefaults.standard.string(forKey: "dictionaryEntries") ?? ""
-        )
+        DictionaryPromptBuilder.prompt(from: AppDefaults.dictionaryEntries)
     }
 }

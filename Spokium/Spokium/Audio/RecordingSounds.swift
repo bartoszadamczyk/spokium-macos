@@ -8,7 +8,7 @@ enum RecordingSounds {
     private static let emptySoundID: SystemSoundID = loadSound(named: "Funk")
 
     static var enabled: Bool {
-        UserDefaults.standard.bool(forKey: "playSounds")
+        AppDefaults.playSounds
     }
 
     static func playStart() {

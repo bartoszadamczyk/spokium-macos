@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DictionaryTab: View {
-    @AppStorage("dictionaryEntries") private var entriesText = ""
+    @AppStorage(DefaultsKey.dictionaryEntries) private var entriesText = AppDefaults.dictionaryEntriesDefault
     @Environment(RecordingController.self) private var controller
     @State private var tokenCount: Int?
 

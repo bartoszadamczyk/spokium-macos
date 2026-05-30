@@ -23,7 +23,7 @@ extension RecordingController {
 
     func startAutoStopTask() {
         autoStopTask?.cancel()
-        let minutes = UserDefaults.standard.object(forKey: "maxRecordingMinutes") as? Double ?? 10
+        let minutes = AppDefaults.maxRecordingMinutes
         guard minutes > 0 else { return }
         let nanoseconds = UInt64(minutes * 60 * 1_000_000_000)
         autoStopTask = Task { [weak self] in
@@ -39,7 +39,7 @@ extension RecordingController {
 
     func startSplitTimer() {
         splitTimer?.invalidate()
-        let minutes = UserDefaults.standard.object(forKey: "autoSplitMinutes") as? Double ?? 5
+        let minutes = AppDefaults.autoSplitMinutes
         guard minutes > 0 else { return }
         splitTimer = Timer.scheduledTimer(withTimeInterval: minutes * 60, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in

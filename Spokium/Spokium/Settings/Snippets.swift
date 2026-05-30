@@ -13,10 +13,8 @@ struct Snippet: Identifiable, Codable, Equatable {
 }
 
 enum SnippetStore {
-    private static let key = "snippets"
-
     static func load() -> [Snippet] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.snippets),
               let snippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
             return []
         }
@@ -25,7 +23,7 @@ enum SnippetStore {
 
     static func save(_ snippets: [Snippet]) {
         guard let data = try? JSONEncoder().encode(snippets) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.standard.set(data, forKey: DefaultsKey.snippets)
     }
 
     static func apply(to text: String) -> String {

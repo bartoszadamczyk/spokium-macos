@@ -144,7 +144,7 @@ final class ModelManager {
         case finished(passed: [String], failed: [String])
     }
     var selectedModelName: String {
-        didSet { UserDefaults.standard.set(selectedModelName, forKey: "selectedModel") }
+        didSet { AppDefaults.selectedModel = selectedModelName }
     }
 
     private let logger = Logger(subsystem: "com.spokium.mac", category: "ModelManager")
@@ -159,7 +159,7 @@ final class ModelManager {
         )
         downloadedNames = onDisk
         let autoName = WhisperModel.all.first(where: { onDisk.contains($0.name) })?.name ?? "base"
-        selectedModelName = UserDefaults.standard.string(forKey: "selectedModel") ?? autoName
+        selectedModelName = AppDefaults.selectedModel ?? autoName
     }
 
     var selectedModelURL: URL? {

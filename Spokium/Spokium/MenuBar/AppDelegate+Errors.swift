@@ -97,7 +97,7 @@ extension AppDelegate {
     }
 
     @objc func disableAutoPaste() {
-        UserDefaults.standard.set(false, forKey: "autoPaste")
+        AppDefaults.autoPaste = false
         controller.dismissPersistentError()
     }
 }

@@ -42,8 +42,8 @@ final class AudioRecorder {
 
         engine = AVAudioEngine()
         let inputNode = engine.inputNode
-        if let uid = UserDefaults.standard.string(forKey: "selectedInputDevice"),
-           !uid.isEmpty {
+        let uid = AppDefaults.selectedInputDevice
+        if !uid.isEmpty {
             if let device = AudioInputDevice.available().first(where: { $0.uid == uid }),
                let audioUnit = inputNode.audioUnit {
                 var deviceID = device.deviceID

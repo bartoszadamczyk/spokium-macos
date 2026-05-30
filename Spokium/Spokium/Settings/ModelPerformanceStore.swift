@@ -13,7 +13,7 @@ enum ModelPerformanceStore {
         }
     }
 
-    private static let key = "modelPerformance"
+
 
     static func record(modelStem: String, audioSeconds: Double, transcribeSeconds: Double) {
         guard let merged = merge(into: load()[modelStem], audioSeconds: audioSeconds, transcribeSeconds: transcribeSeconds)
@@ -44,7 +44,7 @@ enum ModelPerformanceStore {
     }
 
     private static func load() -> [String: Record] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.modelPerformance),
               let dict = try? JSONDecoder().decode([String: Record].self, from: data)
         else { return [:] }
         return dict
@@ -52,7 +52,7 @@ enum ModelPerformanceStore {
 
     private static func save(_ dict: [String: Record]) {
         guard let data = try? JSONEncoder().encode(dict) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.standard.set(data, forKey: DefaultsKey.modelPerformance)
     }
 }
 

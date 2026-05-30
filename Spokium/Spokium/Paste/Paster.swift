@@ -12,9 +12,8 @@ enum Paster {
 
     @discardableResult
     static func paste(_ text: String) async -> PasteResult {
-        let defaults = UserDefaults.standard
-        let autoPaste = defaults.object(forKey: "autoPaste") as? Bool ?? true
-        let preserveClipboard = defaults.object(forKey: "preserveClipboard") as? Bool ?? true
+        let autoPaste = AppDefaults.autoPaste
+        let preserveClipboard = AppDefaults.preserveClipboard
         let pasteboard = NSPasteboard.general
 
         if autoPaste && !hasAccessibilityPermission() {
