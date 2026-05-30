@@ -27,7 +27,7 @@ final class AudioRecorder {
     private let writeErrorFlag = WriteErrorFlag()
     private let levelMeter = AudioLevelMeter()
     private var configChangeObserver: NSObjectProtocol?
-    private let logger = Logger(subsystem: "com.bartoszadamczyk.Spokium", category: "AudioRecorder")
+    private let logger = Logger(subsystem: "com.spokium.mac", category: "AudioRecorder")
 
     var onConfigurationChange: (@MainActor () -> Void)?
 

@@ -29,11 +29,16 @@ enum SnippetStore {
     }
 
     static func apply(to text: String) -> String {
-        let snippets = load().filter { !$0.trigger.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard !snippets.isEmpty else { return text }
+        apply(load(), to: text)
+    }
+
+    // Pure overload: same logic without touching UserDefaults, for testing and reuse.
+    nonisolated static func apply(_ snippets: [Snippet], to text: String) -> String {
+        let active = snippets.filter { !$0.trigger.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !active.isEmpty else { return text }
 
         var result = text
-        for snippet in snippets {
+        for snippet in active {
             let trigger = snippet.trigger.trimmingCharacters(in: .whitespaces)
             let pattern = "\\b" + NSRegularExpression.escapedPattern(for: trigger) + "\\b"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }

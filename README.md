@@ -14,7 +14,7 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 - **Cancel anytime.** Press Esc (or menu item) to discard a recording or abort an in-flight transcription. Whisper's abort callback is wired up, so cancelling during inference actually stops compute.
 - **Auto-stop after time limit.** Configurable maximum recording duration (default 10 min) prevents accidentally leaving the hotkey on forever.
 - **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, sound effects, auto-stop after N minutes, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
-- **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 1.5s) and inserts paragraph breaks so pasted output keeps structure.
+- **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 3s) and inserts paragraph breaks so pasted output keeps structure.
 - **Pastes into the active window.** Uses the system pasteboard + a synthesized ⌘V. Optionally restores previous clipboard contents after paste. Can also be set to clipboard-only mode (no auto-paste).
 - **Paste feedback overlay.** After transcription the HUD briefly confirms the outcome — "Pasted" when auto-paste fires, "Copied to clipboard" when auto-paste is off, and "No speech detected" (with a soft chime) when the transcript came back empty. No transcript content is stored.
 - **Accessibility preflight.** Settings → Transcription shows live paste readiness (granted / required) with a "Request Permission" button. The paste pipeline also preflights `AXIsProcessTrusted` before synthesizing ⌘V — without permission the transcript is left on the clipboard instead of dropping silently.
@@ -73,7 +73,7 @@ User-granted permissions (prompted at first use, not at install):
 
 ## Decisions
 
-- **Paragraph splitting** — detects silence from the actual audio samples using RMS energy analysis in 50ms windows. A silence gap above the configurable threshold (default 1.5s) inserts a paragraph break between whisper segments.
+- **Paragraph splitting** — detects silence from the actual audio samples using RMS energy analysis in 50ms windows. A silence gap above the configurable threshold (default 3s) inserts a paragraph break between whisper segments.
 - **Custom dictionary** — bias recognition via whisper's `initial_prompt`. The user's custom names/spellings are concatenated into the prompt so the model is more likely to produce them. Dictionary entries are not find/replace rules; snippets handle post-transcription replacement.
 - **Model storage** — no bundled model. The app downloads models on demand into the user Application Support directory, under `Spokium/models` as resolved by `FileManager` (inside the sandbox container for sandboxed builds). Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
 - **Download validation** — HTTP status code, GGML format magic bytes, and SHA-1 checksum verification before accepting a downloaded model.
@@ -170,7 +170,7 @@ All core functionality is implemented and working:
 |---|---|---|---|
 | `selectedLanguage` | String | `"auto"` | Whisper language code or `"auto"` for detection |
 | `paragraphSplitting` | Bool | `true` | Insert paragraph breaks on silence gaps |
-| `silenceThreshold` | Double | `1.5` | Seconds of silence to trigger a paragraph break |
+| `silenceThreshold` | Double | `3.0` | Seconds of silence to trigger a paragraph break |
 | `autoPaste` | Bool | `true` | Simulate ⌘V after transcription |
 | `preserveClipboard` | Bool | `true` | Restore clipboard after paste |
 | `dictionaryEntries` | String | `""` | Newline-separated custom names/spellings |

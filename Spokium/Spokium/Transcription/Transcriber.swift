@@ -5,7 +5,7 @@ import whisper
 struct TranscriptionSettings: Sendable {
     var language: String = "auto"
     var paragraphSplitting: Bool = true
-    var minSilenceDuration: Double = 1.5
+    var minSilenceDuration: Double = 3.0
 }
 
 struct TranscriptionResult: Sendable {
@@ -106,7 +106,7 @@ actor Transcriber {
 
         let text: String
         if settings.paragraphSplitting {
-            let silenceBreaks = detectSilenceBreaks(
+            let silenceBreaks = SilenceDetector.breaks(
                 samples: samples,
                 sampleRate: 16000,
                 minSilenceDuration: settings.minSilenceDuration
@@ -145,43 +145,6 @@ actor Transcriber {
             }
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func detectSilenceBreaks(
-        samples: [Float],
-        sampleRate: Int,
-        minSilenceDuration: Double,
-        rmsThreshold: Float = 0.01
-    ) -> [Double] {
-        let windowSize = sampleRate / 20 // 50ms windows
-        let minSilenceWindows = Int(minSilenceDuration * 20)
-        var breaks: [Double] = []
-        var silenceStart: Int?
-
-        for windowIndex in 0..<(samples.count / windowSize) {
-            let offset = windowIndex * windowSize
-            let end = min(offset + windowSize, samples.count)
-            var sumSq: Float = 0
-            for i in offset..<end {
-                sumSq += samples[i] * samples[i]
-            }
-            let rms = (sumSq / Float(end - offset)).squareRoot()
-
-            if rms < rmsThreshold {
-                if silenceStart == nil { silenceStart = windowIndex }
-            } else {
-                if let start = silenceStart {
-                    let duration = windowIndex - start
-                    if duration >= minSilenceWindows {
-                        let midWindow = start + duration / 2
-                        let timeSeconds = Double(midWindow * windowSize) / Double(sampleRate)
-                        breaks.append(timeSeconds)
-                    }
-                    silenceStart = nil
-                }
-            }
-        }
-        return breaks
     }
 
     private func buildTextWithParagraphs(ctx: OpaquePointer, silenceBreaks: [Double]) -> String {
@@ -240,3 +203,4 @@ actor Transcriber {
         return ctx
     }
 }
+

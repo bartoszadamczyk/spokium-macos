@@ -64,19 +64,29 @@ spokium-macos/
     ├── Frameworks/
     │   └── whisper.xcframework     # tracked in this checkout, rebuildable from whisper.cpp
     └── Spokium/
-        ├── App/                    # SpokiumApp entry point, AppDelegate, RecordingController,
-        │                           #   RecordingOverlay, MenuBarIcon
+        ├── App/                    # SpokiumApp entry point
+        ├── MenuBar/                # AppDelegate (+ Menu/Submenus/StatusItem/Errors extensions),
+        │                           #   MenuBarIcon
+        ├── Recording/              # RecordingController (+ Segments/Transcription/Monitors
+        │                           #   extensions), RecordingTypes (state + error enums),
+        │                           #   RecordingOverlay (HUD)
         ├── Audio/                  # AudioRecorder (AVAudioEngine capture),
-        │                           #   AudioDevices (CoreAudio input device enumeration)
+        │                           #   AudioDevices (CoreAudio input device enumeration),
+        │                           #   RecordingSounds
         ├── Transcription/          # Transcriber (whisper.cpp actor), AudioLoader (resampling),
-        │                           #   ModelLocator (directory management + migration)
+        │                           #   ModelLocator (directory management + migration),
+        │                           #   SilenceDetector + DictionaryPromptBuilder (pure helpers)
         ├── Hotkey/                 # HotkeyName (KeyboardShortcuts.Name extension)
         ├── Paste/                  # Paster (pasteboard + CGEvent ⌘V simulation)
         ├── Settings/               # ModelManager (download/validate/select models),
-        │                           #   SettingsView (General, Transcription, Model, Dictionary, Snippets tabs),
-        │                           #   Snippets (find/replace post-processing)
+        │   │                       #   ModelPerformanceStore, SettingsView (TabView root),
+        │   │                       #   Snippets (find/replace post-processing)
+        │   └── Tabs/               # GeneralTab, TranscriptionTab, ModelTab, DictionaryTab,
+        │                           #   SnippetsTab
         └── Assets.xcassets
 ```
+
+`RecordingController` and `AppDelegate` are split across multiple files using same-type extensions in the `Recording/` and `MenuBar/` folders. Shared stored properties on these classes are declared at default (internal) visibility so the extensions can mutate them. External callers don't mutate this state in practice; if that ever changes, the simplest fix is to put state mutation behind methods on the main class.
 
 ## Key implementation details
 
@@ -117,12 +127,17 @@ Operates on the 16kHz Float32 samples in 50ms windows. Computes RMS energy per w
 Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` brings the window to front while `LSUIElement` keeps the app out of the Dock.
 
 ### Current architecture gaps to preserve in recommendations
-- No test target exists.
 - Defaults keys are still stringly typed in multiple files.
-- `SettingsView.swift` currently contains all tabs and helper views in one file.
 - `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
 - The app cannot start a second recording while `finishing`; solving that needs a transcription queue.
 - The app cannot change input devices mid-recording; solving that safely needs segmented recordings.
+
+### Tests
+- Test target: `SpokiumTests` (Swift Testing, not XCTest). Run via `RunAllTests` or `⌘U`.
+- Tests live under `Spokium/SpokiumTests/` and `@testable import Spokium` for internal access.
+- Current coverage is pure-logic only: `SnippetStore.apply(_:to:)`, `SilenceDetector.breaks(...)`, `DictionaryPromptBuilder.prompt(from:)`, and `WhisperModel.validateFile(at:expectedSHA1:)`.
+- Test structs are `@MainActor` because the project's default actor isolation is MainActor — non-isolated tests can't initialize MainActor types like `Snippet`. New test types should follow the same pattern.
+- When adding a testable behavior, prefer extracting a pure helper (like `SilenceDetector`) over making tests reach into actor internals. The helper goes next to the production code; the test stays minimal.
 
 ## Conventions
 
@@ -149,7 +164,7 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.acti
 |---|---|---|---|
 | `selectedLanguage` | String | `"auto"` | TranscriptionTab, RecordingController |
 | `paragraphSplitting` | Bool | `true` | TranscriptionTab, RecordingController |
-| `silenceThreshold` | Double | `1.5` | TranscriptionTab, RecordingController |
+| `silenceThreshold` | Double | `3.0` | TranscriptionTab, RecordingController |
 | `autoPaste` | Bool | `true` | TranscriptionTab, Paster |
 | `preserveClipboard` | Bool | `true` | TranscriptionTab, Paster |
 | `dictionaryEntries` | String | `""` | DictionaryTab, RecordingController |

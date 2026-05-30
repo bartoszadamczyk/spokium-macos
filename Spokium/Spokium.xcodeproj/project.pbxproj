@@ -12,6 +12,16 @@
 		98C9503E2FAFED230018AD75 /* whisper.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 98C9503B2FAFED120018AD75 /* whisper.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		981E84592FCA46B300AF1975 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9855A2DA2FAFE6BB003A6A5D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9855A2E12FAFE6BB003A6A5D;
+			remoteInfo = Spokium;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		98C9503F2FAFED230018AD75 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -27,11 +37,17 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		981E84552FCA46B300AF1975 /* SpokiumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpokiumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9855A2E22FAFE6BB003A6A5D /* Spokium.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spokium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		98C9503B2FAFED120018AD75 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		981E84562FCA46B300AF1975 /* SpokiumTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SpokiumTests;
+			sourceTree = "<group>";
+		};
 		9855A2E42FAFE6BB003A6A5D /* Spokium */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Spokium;
@@ -40,6 +56,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		981E84522FCA46B300AF1975 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9855A2DF2FAFE6BB003A6A5D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -56,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				9855A2E42FAFE6BB003A6A5D /* Spokium */,
+				981E84562FCA46B300AF1975 /* SpokiumTests */,
 				9855A2E32FAFE6BB003A6A5D /* Products */,
 				98C9503B2FAFED120018AD75 /* whisper.xcframework */,
 			);
@@ -65,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				9855A2E22FAFE6BB003A6A5D /* Spokium.app */,
+				981E84552FCA46B300AF1975 /* SpokiumTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,6 +97,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		981E84542FCA46B300AF1975 /* SpokiumTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 981E845B2FCA46B300AF1975 /* Build configuration list for PBXNativeTarget "SpokiumTests" */;
+			buildPhases = (
+				981E84512FCA46B300AF1975 /* Sources */,
+				981E84522FCA46B300AF1975 /* Frameworks */,
+				981E84532FCA46B300AF1975 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				981E845A2FCA46B300AF1975 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				981E84562FCA46B300AF1975 /* SpokiumTests */,
+			);
+			name = SpokiumTests;
+			packageProductDependencies = (
+			);
+			productName = SpokiumTests;
+			productReference = 981E84552FCA46B300AF1975 /* SpokiumTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		9855A2E12FAFE6BB003A6A5D /* Spokium */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9855A2ED2FAFE6BC003A6A5D /* Build configuration list for PBXNativeTarget "Spokium" */;
@@ -104,9 +152,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2640;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					981E84542FCA46B300AF1975 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 9855A2E12FAFE6BB003A6A5D;
+					};
 					9855A2E12FAFE6BB003A6A5D = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -130,11 +182,19 @@
 			projectRoot = "";
 			targets = (
 				9855A2E12FAFE6BB003A6A5D /* Spokium */,
+				981E84542FCA46B300AF1975 /* SpokiumTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		981E84532FCA46B300AF1975 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9855A2E02FAFE6BB003A6A5D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -167,6 +227,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		981E84512FCA46B300AF1975 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9855A2DE2FAFE6BB003A6A5D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -176,7 +243,57 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		981E845A2FCA46B300AF1975 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9855A2E12FAFE6BB003A6A5D /* Spokium */;
+			targetProxy = 981E84592FCA46B300AF1975 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		981E845C2FCA46B300AF1975 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 6J9C6FCCS5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium";
+			};
+			name = Debug;
+		};
+		981E845D2FCA46B300AF1975 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 6J9C6FCCS5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium";
+			};
+			name = Release;
+		};
 		9855A2EB2FAFE6BC003A6A5D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -312,7 +429,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -340,8 +457,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.2.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.bartoszadamczyk.Spokium;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -368,7 +485,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -396,8 +513,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.2.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.bartoszadamczyk.Spokium;
+				MARKETING_VERSION = 1.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -418,6 +535,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		981E845B2FCA46B300AF1975 /* Build configuration list for PBXNativeTarget "SpokiumTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				981E845C2FCA46B300AF1975 /* Debug */,
+				981E845D2FCA46B300AF1975 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9855A2DD2FAFE6BB003A6A5D /* Build configuration list for PBXProject "Spokium" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

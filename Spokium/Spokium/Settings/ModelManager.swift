@@ -147,7 +147,7 @@ final class ModelManager {
         didSet { UserDefaults.standard.set(selectedModelName, forKey: "selectedModel") }
     }
 
-    private let logger = Logger(subsystem: "com.bartoszadamczyk.Spokium", category: "ModelManager")
+    private let logger = Logger(subsystem: "com.spokium.mac", category: "ModelManager")
     private var activeTasks: [String: Task<Void, Never>] = [:]
     private var activeDownloadTasks: [String: URLSessionDownloadTask] = [:]
 

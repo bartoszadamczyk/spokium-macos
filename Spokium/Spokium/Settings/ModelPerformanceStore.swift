@@ -16,14 +16,26 @@ enum ModelPerformanceStore {
     private static let key = "modelPerformance"
 
     static func record(modelStem: String, audioSeconds: Double, transcribeSeconds: Double) {
-        guard audioSeconds > 0, transcribeSeconds > 0 else { return }
+        guard let merged = merge(into: load()[modelStem], audioSeconds: audioSeconds, transcribeSeconds: transcribeSeconds)
+        else { return }
         var all = load()
-        var entry = all[modelStem] ?? Record(count: 0, totalAudioSeconds: 0, totalTranscribeSeconds: 0)
+        all[modelStem] = merged
+        save(all)
+    }
+
+    // Pure aggregation: returns the updated Record, or nil if the inputs are non-positive
+    // and should be ignored. Exposed so tests don't have to touch UserDefaults.
+    nonisolated static func merge(
+        into existing: Record?,
+        audioSeconds: Double,
+        transcribeSeconds: Double
+    ) -> Record? {
+        guard audioSeconds > 0, transcribeSeconds > 0 else { return nil }
+        var entry = existing ?? Record(count: 0, totalAudioSeconds: 0, totalTranscribeSeconds: 0)
         entry.count += 1
         entry.totalAudioSeconds += audioSeconds
         entry.totalTranscribeSeconds += transcribeSeconds
-        all[modelStem] = entry
-        save(all)
+        return entry
     }
 
     static func read(modelStem: String) -> Record? {

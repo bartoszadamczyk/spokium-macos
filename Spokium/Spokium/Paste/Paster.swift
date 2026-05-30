@@ -8,7 +8,7 @@ enum PasteResult: Equatable {
 }
 
 enum Paster {
-    private static let logger = Logger(subsystem: "com.bartoszadamczyk.Spokium", category: "Paster")
+    private static let logger = Logger(subsystem: "com.spokium.mac", category: "Paster")
 
     @discardableResult
     static func paste(_ text: String) async -> PasteResult {
