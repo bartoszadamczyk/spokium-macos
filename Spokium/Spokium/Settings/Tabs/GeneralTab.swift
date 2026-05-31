@@ -8,7 +8,6 @@ struct GeneralTab: View {
     @AppStorage(DefaultsKey.selectedInputDevice) private var selectedInputDevice = AppDefaults.selectedInputDeviceDefault
     @AppStorage(DefaultsKey.pushToRecord) private var pushToRecord = AppDefaults.pushToRecordDefault
     @AppStorage(DefaultsKey.playSounds) private var playSounds = AppDefaults.playSoundsDefault
-    @AppStorage(DefaultsKey.autoSplitMinutes) private var autoSplitMinutes = AppDefaults.autoSplitMinutesDefault
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
@@ -44,17 +43,6 @@ struct GeneralTab: View {
                 .onChange(of: selectedInputDevice) { _, newUID in
                     // Trigger seamless device handoff when changed mid-recording
                     controller.switchInputDevice(uid: newUID)
-                }
-                Picker("Auto-split every:", selection: $autoSplitMinutes) {
-                    Text("Off").tag(0.0)
-                    Text("1 min").tag(1.0)
-                    Text("2 min").tag(2.0)
-                    Text("3 min").tag(3.0)
-                    Text("5 min").tag(5.0)
-                    Text("10 min").tag(10.0)
-                    Text("15 min").tag(15.0)
-                    Text("20 min").tag(20.0)
-                    Text("30 min").tag(30.0)
                 }
                 Toggle("Play sound effects", isOn: $playSounds)
             }

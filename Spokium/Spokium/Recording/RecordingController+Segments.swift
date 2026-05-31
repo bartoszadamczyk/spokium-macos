@@ -17,10 +17,7 @@ extension RecordingController {
             return
         }
 
-        stopLevelMonitoring()
-        stopSplitTimer()
-        autoStopTask?.cancel()
-        autoStopTask = nil
+        stopSegmentMonitors()
 
         currentSegmentStartedAt = nil
         if let url = recorder.stop() {
@@ -82,9 +79,7 @@ extension RecordingController {
                 try await recorder.start(to: url)
                 state = .recording
                 currentSegmentStartedAt = .now
-                startLevelMonitoring()
-                startAutoStopTask()
-                startSplitTimer()
+                startSegmentMonitors()
                 logger.info("resumeRecordingAfterSplit: succeeded on attempt \(i + 1) (\(delayMs)ms delay)")
                 return
             } catch {
@@ -105,9 +100,7 @@ extension RecordingController {
                 try await recorder.start(to: url)
                 state = .recording
                 currentSegmentStartedAt = .now
-                startLevelMonitoring()
-                startAutoStopTask()
-                startSplitTimer()
+                startSegmentMonitors()
                 logger.info("resumeRecordingAfterSplit: succeeded on system default after device disconnect")
                 return
             } catch {

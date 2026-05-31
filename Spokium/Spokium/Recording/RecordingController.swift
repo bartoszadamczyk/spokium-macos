@@ -24,14 +24,14 @@ final class RecordingController {
     }
 
     var queuedTranscriptionCount: Int {
-        pendingTranscriptionCount
+        queue.queuedCount
     }
 
     // Estimated remaining transcription time for everything currently in the queue,
     // based on the selected model's historical realtime speed. Returns nil when no
     // stats are available yet (first run on this model).
     var transcriptionEstimateSeconds: Double? {
-        guard pendingTranscriptionAudioSeconds > 0 else { return nil }
+        guard queue.queuedAudioSeconds > 0 else { return nil }
         let manager = ModelManager()
         guard let url = manager.selectedModelURL else { return nil }
         let stem = url.deletingPathExtension().lastPathComponent
@@ -39,8 +39,8 @@ final class RecordingController {
               stats.speedRatio > 0
         else { return nil }
 
-        var estimate = pendingTranscriptionAudioSeconds / stats.speedRatio
-        if let start = currentTranscriptionStartedAt {
+        var estimate = queue.queuedAudioSeconds / stats.speedRatio
+        if let start = queue.currentStartTime {
             estimate -= Self.seconds(of: ContinuousClock.now - start)
         }
         return max(0, estimate)
@@ -52,31 +52,26 @@ final class RecordingController {
     }
 
     // State shared with extensions in this folder. Kept internal (not private) so
-    // RecordingController+Segments / +Transcription / +Monitors can read and mutate it.
+    // RecordingController+Segments / +Transcription can read and mutate it.
     let recorder = AudioRecorder()
     let logger = Logger(subsystem: "com.spokium.mac", category: "Recording")
-    var transcriber: Transcriber?
+    let monitors = RecordingMonitors()
+    let queue = TranscriptionQueue(
+        logger: Logger(subsystem: "com.spokium.mac", category: "TranscriptionQueue")
+    )
     var sessionStartedAt: ContinuousClock.Instant?
-    var activeTasks: [Task<Void, Never>] = []
-    var lastTranscriptionTask: Task<Void, Never>?  // tail of the serial chain
-    var levelTimer: Timer?
-    var escapeMonitor: Any?
-    var autoStopTask: Task<Void, Never>?
-    var splitTimer: Timer?
     var currentRecordingURL: URL?
     var pendingAudioSegments: [URL] = []  // accumulated split segments, transcribed as one unit on stop
     var pendingStartCancel = false
     var isResumingAfterSplit = false
 
-    // Session: one or more consecutive recordings whose results are concatenated
+    // Per-session accumulated transcripts. Appended by the queue's onComplete
+    // callback, drained by finishSession.
     var sessionTexts: [String] = []
-    var pendingTranscriptionCount = 0
 
     // Audio-duration accounting for the menu bar status row.
     var currentSegmentStartedAt: ContinuousClock.Instant?
     var pendingSegmentsAudioSeconds: Double = 0  // split segments not yet enqueued
-    var pendingTranscriptionAudioSeconds: Double = 0  // queued + in-progress
-    var currentTranscriptionStartedAt: ContinuousClock.Instant?
 
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleRecording) { [weak self] in
@@ -120,27 +115,21 @@ final class RecordingController {
     func cleanup() async {
         // Halt whisper between graph computations. unload() below serialises after
         // the in-flight transcribe() exits, so it sees the freed-context state.
-        transcriber?.abort()
+        queue.abort()
 
         if recorder.isRunning {
             _ = recorder.stop()
             clearCurrentSegment()
         }
 
-        stopLevelMonitoring()
-        stopSplitTimer()
-        stopEscapeMonitor()
-        autoStopTask?.cancel()
-        autoStopTask = nil
+        monitors.stopAll()
+        inputLevel = 0
 
         for url in pendingAudioSegments { try? FileManager.default.removeItem(at: url) }
         pendingAudioSegments = []
 
-        for task in activeTasks { task.cancel() }
-        activeTasks = []
-
-        await transcriber?.unload()
-        transcriber = nil
+        queue.cancelAll()
+        await queue.unload()
     }
 
     func dismissError() {
@@ -163,12 +152,7 @@ final class RecordingController {
     func countDictionaryTokens(_ text: String) async -> Int? {
         let manager = ModelManager()
         guard let modelURL = manager.selectedModelURL else { return nil }
-        if transcriber?.modelURL != modelURL {
-            transcriber = nil
-        }
-        let transcriber = self.transcriber ?? Transcriber(modelURL: modelURL)
-        self.transcriber = transcriber
-        return try? await transcriber.tokenCount(for: text)
+        return await queue.tokenCount(for: text, modelURL: modelURL)
     }
 
     func toggle() {
@@ -192,11 +176,8 @@ final class RecordingController {
             pendingStartCancel = true
             logger.info("Recording start cancellation requested")
         case .recording:
-            stopLevelMonitoring()
-            stopSplitTimer()
-            stopEscapeMonitor()
-            autoStopTask?.cancel()
-            autoStopTask = nil
+            monitors.stopAll()
+            inputLevel = 0
             _ = recorder.stop()
             clearCurrentSegment()
             cancelAllPending()
@@ -210,30 +191,49 @@ final class RecordingController {
     }
 
     func cancelAllPending() {
-        transcriber?.abort()
-        for task in activeTasks { task.cancel() }
-        activeTasks = []
-        lastTranscriptionTask = nil
+        queue.cancelAll()
         sessionTexts = []
-        pendingTranscriptionCount = 0
-        pendingTranscriptionAudioSeconds = 0
         pendingSegmentsAudioSeconds = 0
         currentSegmentStartedAt = nil
-        currentTranscriptionStartedAt = nil
         for url in pendingAudioSegments { try? FileManager.default.removeItem(at: url) }
         pendingAudioSegments = []
         state = .idle
-        stopEscapeMonitor()
+        monitors.stopEscape()
     }
 
     // Transitions out of recording; goes to .finishing if transcriptions are pending, else .idle
     func returnFromRecording() {
-        if pendingTranscriptionCount > 0 {
+        if queue.queuedCount > 0 {
             state = .finishing
         } else {
             state = .idle
-            stopEscapeMonitor()
+            monitors.stopEscape()
         }
+    }
+
+    // Per-segment monitors: level meter, auto-stop deadline. Called at the
+    // start of every fresh segment (initial, post-split resume).
+    func startSegmentMonitors() {
+        monitors.startLevel(recorder: recorder) { [weak self] level in
+            self?.inputLevel = level
+        }
+        monitors.startAutoStop(after: AppDefaults.maxRecordingMinutes) { [weak self] in
+            guard let self, case .recording = self.state else { return }
+            self.logger.info("Auto-stopping recording (time limit reached)")
+            self.stop()
+        }
+    }
+
+    func stopSegmentMonitors() {
+        monitors.stopLevel()
+        inputLevel = 0
+        monitors.cancelAutoStop()
+    }
+
+    // Session-scoped escape monitor — started once at session start, lives through
+    // splits, stops only when the session fully unwinds.
+    func startEscape() {
+        monitors.startEscape { [weak self] in self?.cancel() }
     }
 
     func clearCurrentSegment() {

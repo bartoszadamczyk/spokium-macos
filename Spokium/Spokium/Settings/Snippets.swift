@@ -38,7 +38,13 @@ enum SnippetStore {
         var result = text
         for snippet in active {
             let trigger = snippet.trigger.trimmingCharacters(in: .whitespaces)
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: trigger) + "\\b"
+            // Use Unicode-aware lookarounds instead of `\b`, so triggers that
+            // start or end with a non-word character (C++, Mr., #hello, etc.)
+            // still match when surrounded by whitespace or string boundaries.
+            // \W in NSRegularExpression is Unicode-aware by default, so accented
+            // and CJK characters are treated as word chars correctly.
+            let escaped = NSRegularExpression.escapedPattern(for: trigger)
+            let pattern = "(?:^|(?<=\\W))" + escaped + "(?:$|(?=\\W))"
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
             let range = NSRange(result.startIndex..., in: result)
             result = regex.stringByReplacingMatches(

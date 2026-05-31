@@ -104,4 +104,79 @@ struct SilenceDetectorTests {
         let first = breaks.first ?? 0
         #expect(abs(first - 1.05) < 0.001)
     }
+
+    // MARK: - Edge cases
+
+    @Test func silenceExactlyAtThreshold_isDetected() {
+        // minSilenceDuration 1.0 s = 20 windows. Provide exactly 20 silent windows.
+        // Duration check is `>= minSilenceWindows`, so exact match counts.
+        let breaks = SilenceDetector.breaks(
+            samples: pattern([(true, 1), (false, 20), (true, 1)]),
+            sampleRate: sampleRate,
+            minSilenceDuration: 1.0
+        )
+        #expect(breaks.count == 1)
+    }
+
+    @Test func silenceOneWindowBelowThreshold_isNotDetected() {
+        // 19 silent windows at threshold of 1.0 s (20 windows) → just under.
+        let breaks = SilenceDetector.breaks(
+            samples: pattern([(true, 1), (false, 19), (true, 1)]),
+            sampleRate: sampleRate,
+            minSilenceDuration: 1.0
+        )
+        #expect(breaks.isEmpty)
+    }
+
+    @Test func verySmallThreshold_singleWindowSilence_isDetected() {
+        // minSilenceDuration 0.05 s = 1 window. Even a 1-window silence counts.
+        let breaks = SilenceDetector.breaks(
+            samples: pattern([(true, 1), (false, 1), (true, 1)]),
+            sampleRate: sampleRate,
+            minSilenceDuration: 0.05
+        )
+        #expect(breaks.count == 1)
+    }
+
+    @Test func oddSampleRate_doesNotCrashAndStillDetects() {
+        // 16001 / 20 = 800 (rounded down). Window size is still 800. Pattern
+        // construction uses 16001 samples per "second" but the detector reads
+        // its own sampleRate to find the window size, so the test still works.
+        let sr = 16_001
+        let windowSize = sr / 20
+        let loud = [Float](repeating: 0.5, count: windowSize)
+        let silent = [Float](repeating: 0.0, count: 40 * windowSize)
+        let samples = loud + silent + loud
+
+        let breaks = SilenceDetector.breaks(
+            samples: samples,
+            sampleRate: sr,
+            minSilenceDuration: 1.0
+        )
+        #expect(breaks.count == 1)
+    }
+
+    @Test func zeroSampleRate_producesNoBreaks() {
+        // windowSize = 0 → guard in production returns []. Defensive check.
+        let breaks = SilenceDetector.breaks(
+            samples: samples(silentWindows: 10),
+            sampleRate: 0,
+            minSilenceDuration: 1.0
+        )
+        #expect(breaks.isEmpty)
+    }
+
+    @Test func silenceStartingFromBufferStart_isDetected_whenFollowedByLoud() {
+        // Silence starts at window 0 (silenceStart=0), 40 windows, then loud.
+        // Should produce a break at midpoint (window 20).
+        let breaks = SilenceDetector.breaks(
+            samples: pattern([(false, 40), (true, 1)]),
+            sampleRate: sampleRate,
+            minSilenceDuration: 1.0
+        )
+        #expect(breaks.count == 1)
+        let first = breaks.first ?? -1
+        // midWindow = 0 + 20 = 20. timeSeconds = 20 * 800 / 16000 = 1.0.
+        #expect(abs(first - 1.0) < 0.001)
+    }
 }

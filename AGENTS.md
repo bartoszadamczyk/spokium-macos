@@ -67,9 +67,10 @@ spokium-macos/
         ├── App/                    # SpokiumApp entry point
         ├── MenuBar/                # AppDelegate (+ Menu/Submenus/StatusItem/Errors extensions),
         │                           #   MenuBarIcon
-        ├── Recording/              # RecordingController (+ Segments/Transcription/Monitors
-        │                           #   extensions), RecordingTypes (state + error enums),
-        │                           #   RecordingOverlay (HUD)
+        ├── Recording/              # RecordingController (+ Segments/Transcription
+        │                           #   extensions), RecordingMonitors (level/auto-stop/split/Esc
+        │                           #   timers), TranscriptionQueue (serial chain + whisper run),
+        │                           #   RecordingTypes (state + error enums), RecordingOverlay (HUD)
         ├── Audio/                  # AudioRecorder (AVAudioEngine capture),
         │                           #   AudioDevices (CoreAudio input device enumeration),
         │                           #   RecordingSounds
@@ -134,7 +135,14 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.acti
 ### Tests
 - Test target: `SpokiumTests` (Swift Testing, not XCTest). Run via `RunAllTests` or `⌘U`.
 - Tests live under `Spokium/SpokiumTests/` and `@testable import Spokium` for internal access.
-- Current coverage is pure-logic only: `SnippetStore.apply(_:to:)`, `SilenceDetector.breaks(...)`, `DictionaryPromptBuilder.prompt(from:)`, and `WhisperModel.validateFile(at:expectedSHA1:)`.
+- Coverage spans pure logic and the audio pipeline up to (but not including) whisper inference:
+  - `SnippetStore.apply(_:to:)` — including Unicode triggers, embedded punctuation, and triggers with leading/trailing non-word characters (C++, Mr., #hello).
+  - `SilenceDetector.breaks(...)` — patterns, exact-threshold boundaries, odd sample rates, zero-rate guard, silence at buffer start.
+  - `DictionaryPromptBuilder.prompt(from:)` — entry parsing.
+  - `WhisperModel.validateFile(at:expectedSHA1:)` — magic + SHA-1 checks.
+  - `WhisperModel.all` metadata sanity — SHA-1 format, file naming convention, HuggingFace URLs.
+  - `ModelPerformanceStore.merge` / `Record.formattedSpeed` / `.summary` — aggregation.
+  - `AudioLoader.loadResampled(url:)` — sample-count, RMS preservation, stereo downmix, error path. Audio fixtures are generated at test time via `AVAudioFile` (no checked-in binaries).
 - Test structs are `@MainActor` because the project's default actor isolation is MainActor — non-isolated tests can't initialize MainActor types like `Snippet`. New test types should follow the same pattern.
 - When adding a testable behavior, prefer extracting a pure helper (like `SilenceDetector`) over making tests reach into actor internals. The helper goes next to the production code; the test stays minimal.
 

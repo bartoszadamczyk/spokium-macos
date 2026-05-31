@@ -18,7 +18,6 @@ nonisolated enum DefaultsKey {
     static let playSounds = "playSounds"
     static let snippets = "snippets"
     static let maxRecordingMinutes = "maxRecordingMinutes"
-    static let autoSplitMinutes = "autoSplitMinutes"
     static let modelPerformance = "modelPerformance"
 }
 
@@ -38,7 +37,6 @@ nonisolated enum AppDefaults {
     static let pushToRecordDefault = false
     static let playSoundsDefault = false
     static let maxRecordingMinutesDefault: Double = 10.0
-    static let autoSplitMinutesDefault: Double = 5.0
 
     private static var store: UserDefaults { .standard }
 
@@ -100,8 +98,4 @@ nonisolated enum AppDefaults {
         set { store.set(newValue, forKey: DefaultsKey.maxRecordingMinutes) }
     }
 
-    static var autoSplitMinutes: Double {
-        get { store.object(forKey: DefaultsKey.autoSplitMinutes) as? Double ?? autoSplitMinutesDefault }
-        set { store.set(newValue, forKey: DefaultsKey.autoSplitMinutes) }
-    }
 }
