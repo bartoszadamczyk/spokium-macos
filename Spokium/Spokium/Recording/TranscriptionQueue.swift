@@ -80,9 +80,14 @@ final class TranscriptionQueue {
         onIdle: @MainActor () -> Void
     ) async {
         var capturedDebugSegments: [DebugSegment]?
+        var capturedMetadata: DebugMetadata?
         defer {
             if AppDefaults.debugMode {
-                DebugRecordingStore.persistAndConsume(urls, debugSegments: capturedDebugSegments)
+                DebugRecordingStore.persistAndConsume(
+                    urls,
+                    metadata: capturedMetadata,
+                    debugSegments: capturedDebugSegments
+                )
             } else {
                 for url in urls { try? FileManager.default.removeItem(at: url) }
             }
@@ -145,11 +150,23 @@ final class TranscriptionQueue {
             let modelStem = modelURL.deletingPathExtension().lastPathComponent
             logger.info("Transcribed: model=\(modelStem, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), segments=\(urls.count), audio=\(String(format: "%.1f", totalAudioSeconds))s, recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public)")
 
-            let (sec, atto) = transcriptionDuration.components
+            let (tsec, tatto) = transcriptionDuration.components
+            let transcribeSeconds = Double(tsec) + Double(tatto) * 1e-18
             ModelPerformanceStore.record(
                 modelStem: modelStem,
                 audioSeconds: totalAudioSeconds,
-                transcribeSeconds: Double(sec) + Double(atto) * 1e-18
+                transcribeSeconds: transcribeSeconds
+            )
+
+            let (rsec, ratto) = recordingDuration.components
+            let recordingSecondsDouble = Double(rsec) + Double(ratto) * 1e-18
+            capturedMetadata = DebugMetadata(
+                modelStem: modelStem,
+                language: result.language,
+                charCount: result.text.count,
+                totalAudioSeconds: totalAudioSeconds,
+                recordingSeconds: recordingSecondsDouble,
+                transcriptionSeconds: transcribeSeconds
             )
 
             onComplete(.success(text: result.text, language: result.language))

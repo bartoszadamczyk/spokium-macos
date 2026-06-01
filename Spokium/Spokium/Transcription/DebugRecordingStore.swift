@@ -31,9 +31,15 @@ nonisolated enum DebugRecordingStore {
 
     // Moves the given audio URLs into the debug folder, then enforces the size cap.
     // When `debugSegments` is non-nil, also writes a markdown sidecar next to the
-    // first moved audio file containing the per-segment whisper output. Source
-    // files are gone afterward — the caller does NOT need to delete them.
-    nonisolated static func persistAndConsume(_ urls: [URL], debugSegments: [DebugSegment]? = nil) {
+    // first moved audio file containing the per-segment whisper output. The
+    // `metadata` (model name, language, durations, char count) is mirrored into
+    // the sidecar header so the file is a self-contained record. Source files
+    // are gone afterward — the caller does NOT need to delete them.
+    nonisolated static func persistAndConsume(
+        _ urls: [URL],
+        metadata: DebugMetadata? = nil,
+        debugSegments: [DebugSegment]? = nil
+    ) {
         do {
             try ensureDirectoryExists()
         } catch {
@@ -42,8 +48,13 @@ nonisolated enum DebugRecordingStore {
         }
         var movedDestinations: [URL] = []
         for url in urls {
+            let sourceExists = FileManager.default.fileExists(atPath: url.path)
             let dest = directory.appendingPathComponent(url.lastPathComponent)
             do {
+                if !sourceExists {
+                    logger.warning("Source already missing before move: \(url.lastPathComponent, privacy: .public)")
+                    continue
+                }
                 if FileManager.default.fileExists(atPath: dest.path) {
                     try FileManager.default.removeItem(at: dest)
                 }
@@ -51,16 +62,26 @@ nonisolated enum DebugRecordingStore {
                 movedDestinations.append(dest)
             } catch {
                 logger.warning("Failed to move \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                try? FileManager.default.removeItem(at: url)
+                // Don't delete the source — let the user see whatever's there in the temp dir.
             }
         }
         if let debugSegments, let first = movedDestinations.first {
-            writeSidecar(for: first, audioFiles: movedDestinations, segments: debugSegments)
+            writeSidecar(
+                for: first,
+                audioFiles: movedDestinations,
+                metadata: metadata,
+                segments: debugSegments
+            )
         }
         enforceSizeCap()
     }
 
-    nonisolated static func renderSidecar(audioFileNames: [String], segments: [DebugSegment], now: Date = Date()) -> String {
+    nonisolated static func renderSidecar(
+        audioFileNames: [String],
+        metadata: DebugMetadata? = nil,
+        segments: [DebugSegment],
+        now: Date = Date()
+    ) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         var out = "# Whisper Debug Log\n\n"
@@ -69,6 +90,14 @@ nonisolated enum DebugRecordingStore {
             out += "- **Audio**: \(audioFileNames[0])\n"
         } else {
             out += "- **Audio segments**: \(audioFileNames.joined(separator: ", "))\n"
+        }
+        if let metadata {
+            out += "- **Model**: \(metadata.modelStem)\n"
+            out += "- **Language**: \(metadata.language)\n"
+            out += String(format: "- **Audio duration**: %.2fs\n", metadata.totalAudioSeconds)
+            out += String(format: "- **Recording duration**: %.2fs\n", metadata.recordingSeconds)
+            out += String(format: "- **Transcription duration**: %.2fs\n", metadata.transcriptionSeconds)
+            out += "- **Chars**: \(metadata.charCount)\n"
         }
         out += "\n## Segments\n\n"
         if segments.isEmpty {
@@ -89,10 +118,16 @@ nonisolated enum DebugRecordingStore {
         return out
     }
 
-    private nonisolated static func writeSidecar(for audioURL: URL, audioFiles: [URL], segments: [DebugSegment]) {
+    private nonisolated static func writeSidecar(
+        for audioURL: URL,
+        audioFiles: [URL],
+        metadata: DebugMetadata?,
+        segments: [DebugSegment]
+    ) {
         let sidecarURL = audioURL.deletingPathExtension().appendingPathExtension("md")
         let body = renderSidecar(
             audioFileNames: audioFiles.map(\.lastPathComponent),
+            metadata: metadata,
             segments: segments
         )
         do {

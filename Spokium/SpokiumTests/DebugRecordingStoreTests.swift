@@ -37,6 +37,41 @@ struct DebugRecordingStoreTests {
         #expect(md.contains("| 1 | 2.40s | 4.80s | 0.005 | Another sentence here. |"))
     }
 
+    @Test func renderSidecar_withMetadata_emitsMetadataHeader() {
+        let md = DebugRecordingStore.renderSidecar(
+            audioFileNames: ["x.caf"],
+            metadata: DebugMetadata(
+                modelStem: "ggml-tiny",
+                language: "en",
+                charCount: 56,
+                totalAudioSeconds: 4.80,
+                recordingSeconds: 5.21,
+                transcriptionSeconds: 0.95
+            ),
+            segments: [segment(0, 0.0, 1.0, 0.01, "test")],
+            now: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(md.contains("**Model**: ggml-tiny"))
+        #expect(md.contains("**Language**: en"))
+        #expect(md.contains("**Audio duration**: 4.80s"))
+        #expect(md.contains("**Recording duration**: 5.21s"))
+        #expect(md.contains("**Transcription duration**: 0.95s"))
+        #expect(md.contains("**Chars**: 56"))
+    }
+
+    @Test func renderSidecar_withoutMetadata_omitsMetadataHeader() {
+        let md = DebugRecordingStore.renderSidecar(
+            audioFileNames: ["x.caf"],
+            metadata: nil,
+            segments: [segment(0, 0.0, 1.0, 0.01, "test")],
+            now: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(!md.contains("**Model**"))
+        #expect(!md.contains("**Language**"))
+    }
+
     @Test func renderSidecar_multipleAudioFiles_listsAll() {
         let md = DebugRecordingStore.renderSidecar(
             audioFileNames: ["a.caf", "b.caf", "c.caf"],

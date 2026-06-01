@@ -25,6 +25,18 @@ struct DebugSegment: Sendable {
     let text: String
 }
 
+// Mirrors the metadata we log to OSLog on every successful transcription. Written
+// into the debug sidecar markdown when debug mode is on so the file is a
+// complete record of what happened, not just the per-segment breakdown.
+struct DebugMetadata: Sendable {
+    let modelStem: String
+    let language: String
+    let charCount: Int
+    let totalAudioSeconds: Double
+    let recordingSeconds: Double
+    let transcriptionSeconds: Double
+}
+
 enum TranscriberError: Error {
     case modelLoadFailed
     case inferenceFailed(Int32)

@@ -113,9 +113,17 @@ private struct OverlayContentView: View {
             HStack(spacing: 10) {
                 switch mode {
                 case .recording:
-                    LevelMic(level: controller.inputLevel)
-                    Text("Recording")
-                        .font(.system(size: 18, weight: .medium))
+                    if controller.noAudioWarning {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.system(size: 20, weight: .medium))
+                        Text("No audio — check microphone")
+                            .font(.system(size: 18, weight: .medium))
+                    } else {
+                        LevelMic(level: controller.inputLevel)
+                        Text("Recording")
+                            .font(.system(size: 18, weight: .medium))
+                    }
                 case .transcribing:
                     ProgressView()
                         .controlSize(.small)

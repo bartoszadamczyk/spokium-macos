@@ -17,17 +17,50 @@ final class RecordingMonitors {
     private var autoStopTask: Task<Void, Never>?
     private var escapeMonitor: Any?
     private var smoothedLevel: Float = 0
+    private var levelTicks: Int = 0
+    private var anyAudioSeen = false
+    private var silenceCheckSettled = false
 
-    func startLevel(recorder: AudioRecorder, onUpdate: @escaping @MainActor (Float) -> Void) {
+    // onSilenceDetected fires once per segment iff no audio above a near-zero
+    // threshold is observed during the first ~2s of recording. Targets the
+    // lid-closed-on-built-in-mic case (mic in lid hinge → AVAudioEngine starts
+    // but no audio flows). Once any signal is seen the check is disabled for
+    // the rest of the segment, so noise-cancelled inputs (AirPods, Continuity)
+    // don't false-positive on mid-recording pauses.
+    func startLevel(
+        recorder: AudioRecorder,
+        onUpdate: @escaping @MainActor (Float) -> Void,
+        onSilenceDetected: (@MainActor () -> Void)? = nil
+    ) {
         levelTimer?.invalidate()
         smoothedLevel = 0
+        levelTicks = 0
+        anyAudioSeen = false
+        silenceCheckSettled = false
         let smoothing: Float = 0.3
+        let silenceThreshold: Float = 0.001
+        let ticksBeforeWarning = 40  // 40 * 0.05s = 2.0s
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let raw = recorder.currentLevel
                 self.smoothedLevel = self.smoothedLevel * (1 - smoothing) + raw * smoothing
                 onUpdate(self.smoothedLevel)
+
+                if !self.silenceCheckSettled, let onSilenceDetected {
+                    if raw >= silenceThreshold {
+                        self.anyAudioSeen = true
+                        self.silenceCheckSettled = true
+                    } else {
+                        self.levelTicks += 1
+                        if self.levelTicks >= ticksBeforeWarning {
+                            self.silenceCheckSettled = true
+                            if !self.anyAudioSeen {
+                                onSilenceDetected()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -36,6 +69,9 @@ final class RecordingMonitors {
         levelTimer?.invalidate()
         levelTimer = nil
         smoothedLevel = 0
+        levelTicks = 0
+        anyAudioSeen = false
+        silenceCheckSettled = false
     }
 
     func startAutoStop(after minutes: Double, onFire: @escaping @MainActor () -> Void) {
