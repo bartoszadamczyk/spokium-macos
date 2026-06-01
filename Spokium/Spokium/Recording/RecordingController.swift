@@ -59,6 +59,7 @@ final class RecordingController {
     let queue = TranscriptionQueue(
         logger: Logger(subsystem: "com.spokium.mac", category: "TranscriptionQueue")
     )
+    let history = TranscriptHistory()
     var sessionStartedAt: ContinuousClock.Instant?
     var currentRecordingURL: URL?
     var pendingAudioSegments: [URL] = []  // accumulated split segments, transcribed as one unit on stop
@@ -129,6 +130,7 @@ final class RecordingController {
         pendingAudioSegments = []
 
         queue.cancelAll()
+        history.clear()
         await queue.unload()
     }
 

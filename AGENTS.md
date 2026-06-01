@@ -22,7 +22,7 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 ## Hard constraints
 
 - **No network calls** for transcription or telemetry. Model downloads from Hugging Face are the only allowed network use.
-- **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count).
+- **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count). An opt-in `TranscriptHistory` keeps the last 5 transcripts in memory only when `AppDefaults.keepRecentTranscripts` is true (default false); the store is cleared on `RecordingController.cleanup()` and via the "Clear History" menu item, and never serialised.
 - **No dock icon ever.** `LSUIElement = true` is set through generated Info.plist build settings. Settings windows are brought to front via `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront`; do not switch the app to `.regular`.
 - **Restore the pasteboard** after pasting so we don't clobber whatever the user had copied (when enabled in settings).
 
@@ -145,6 +145,31 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.acti
   - `AudioLoader.loadResampled(url:)` — sample-count, RMS preservation, stereo downmix, error path. Audio fixtures are generated at test time via `AVAudioFile` (no checked-in binaries).
 - Test structs are `@MainActor` because the project's default actor isolation is MainActor — non-isolated tests can't initialize MainActor types like `Snippet`. New test types should follow the same pattern.
 - When adding a testable behavior, prefer extracting a pure helper (like `SilenceDetector`) over making tests reach into actor internals. The helper goes next to the production code; the test stays minimal.
+
+## Hidden debug mode
+
+Enable from terminal (no UI surface):
+
+```sh
+defaults write com.spokium.mac debugMode -bool true
+```
+
+When on:
+- Recorded audio is **moved** to `~/Library/Containers/com.spokium.mac/Data/Library/Application Support/Spokium/debug-recordings/` after each transcription instead of being deleted. Folder is size-capped at 100 MB (oldest files dropped first).
+- A markdown sidecar (`{audio-basename}.md`) is written next to each audio file containing per-segment whisper output: index, start/end timestamps (s), `no_speech_prob`, raw text. `Transcriber` populates `TranscriptionResult.debugSegments` only when `AppDefaults.debugMode` is true; `TranscriptionQueue` captures it and `DebugRecordingStore.persistAndConsume(_:debugSegments:)` writes the sidecar.
+- A "Reveal Debug Folder" item appears at the bottom of the menu bar dropdown.
+
+**No transcript text is written to OSLog** — debug data is confined to the sidecar files in the debug folder so cleanup is a single `rm -rf` of the folder.
+
+Disable:
+
+```sh
+defaults write com.spokium.mac debugMode -bool false
+```
+
+On disable, the debug folder is wiped (via `UserDefaults.didChangeNotification` observer + a launch-time idempotent cleanup). The menu item disappears on next menu open.
+
+This is a developer affordance for diagnosing whisper hallucinations and false-positive "no speech detected" cases. Privacy posture: opt-in via terminal, sandbox-only, never network, cleared on disable.
 
 ## Conventions
 

@@ -19,6 +19,10 @@ nonisolated enum DefaultsKey {
     static let snippets = "snippets"
     static let maxRecordingMinutes = "maxRecordingMinutes"
     static let modelPerformance = "modelPerformance"
+    static let keepRecentTranscripts = "keepRecentTranscripts"
+    // Hidden developer toggle. No UI surface — enable via terminal:
+    //   defaults write com.spokium.mac debugMode -bool true
+    static let debugMode = "debugMode"
 }
 
 // Typed read/write accessors for everything in `DefaultsKey`. Pure functions over
@@ -36,6 +40,7 @@ nonisolated enum AppDefaults {
     static let selectedInputDeviceDefault = ""
     static let pushToRecordDefault = false
     static let playSoundsDefault = false
+    static let keepRecentTranscriptsDefault = false
     static let maxRecordingMinutesDefault: Double = 10.0
 
     private static var store: UserDefaults { .standard }
@@ -93,9 +98,19 @@ nonisolated enum AppDefaults {
         set { store.set(newValue, forKey: DefaultsKey.playSounds) }
     }
 
+    static var keepRecentTranscripts: Bool {
+        get { store.bool(forKey: DefaultsKey.keepRecentTranscripts) }
+        set { store.set(newValue, forKey: DefaultsKey.keepRecentTranscripts) }
+    }
+
     static var maxRecordingMinutes: Double {
         get { store.object(forKey: DefaultsKey.maxRecordingMinutes) as? Double ?? maxRecordingMinutesDefault }
         set { store.set(newValue, forKey: DefaultsKey.maxRecordingMinutes) }
     }
 
+    // Read-only on purpose. Not exposed in Settings; enable via terminal:
+    //   defaults write com.spokium.mac debugMode -bool true
+    static var debugMode: Bool {
+        store.bool(forKey: DefaultsKey.debugMode)
+    }
 }

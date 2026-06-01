@@ -79,8 +79,13 @@ final class TranscriptionQueue {
         onComplete: @MainActor (Outcome) -> Void,
         onIdle: @MainActor () -> Void
     ) async {
+        var capturedDebugSegments: [DebugSegment]?
         defer {
-            for url in urls { try? FileManager.default.removeItem(at: url) }
+            if AppDefaults.debugMode {
+                DebugRecordingStore.persistAndConsume(urls, debugSegments: capturedDebugSegments)
+            } else {
+                for url in urls { try? FileManager.default.removeItem(at: url) }
+            }
             pendingCount -= 1
             pendingAudioSeconds = max(0, pendingAudioSeconds - audioSeconds)
             if pendingCount == 0 {
@@ -135,6 +140,7 @@ final class TranscriptionQueue {
 
             guard !Task.isCancelled else { return }
 
+            capturedDebugSegments = result.debugSegments
             let transcriptionDuration = ContinuousClock.now - transcribeStart
             let modelStem = modelURL.deletingPathExtension().lastPathComponent
             logger.info("Transcribed: model=\(modelStem, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), segments=\(urls.count), audio=\(String(format: "%.1f", totalAudioSeconds))s, recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public)")

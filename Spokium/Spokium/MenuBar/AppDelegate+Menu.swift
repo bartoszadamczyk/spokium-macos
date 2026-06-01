@@ -82,6 +82,12 @@ extension AppDelegate {
         modelItem.submenu = modelMenu
         menu.addItem(modelItem)
 
+        recentTranscriptsMenu = NSMenu()
+        recentTranscriptsItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
+        recentTranscriptsItem.submenu = recentTranscriptsMenu
+        recentTranscriptsItem.isHidden = true
+        menu.addItem(recentTranscriptsItem)
+
         menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(
@@ -91,6 +97,15 @@ extension AppDelegate {
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        revealDebugFolderItem = NSMenuItem(
+            title: "Reveal Debug Folder",
+            action: #selector(revealDebugFolder),
+            keyEquivalent: ""
+        )
+        revealDebugFolderItem.target = self
+        revealDebugFolderItem.isHidden = !AppDefaults.debugMode
+        menu.addItem(revealDebugFolderItem)
 
         let quit = NSMenuItem(
             title: "Quit Spokium",
@@ -116,6 +131,8 @@ extension AppDelegate {
         refreshErrorMenu()
         refreshInputDeviceMenu()
         refreshModelMenu()
+        refreshRecentTranscriptsMenu()
+        revealDebugFolderItem.isHidden = !AppDefaults.debugMode
         refreshQueueStatus()
         startQueueStatusTimer()
     }

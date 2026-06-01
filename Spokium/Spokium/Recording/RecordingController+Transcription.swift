@@ -146,6 +146,10 @@ extension RecordingController {
             return
         }
 
+        if AppDefaults.keepRecentTranscripts {
+            history.add(finalText)
+        }
+
         Task { [weak self] in
             guard let self else { return }
             switch await Paster.paste(finalText) {

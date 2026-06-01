@@ -11,6 +11,18 @@ struct TranscriptionSettings: Sendable {
 struct TranscriptionResult: Sendable {
     let text: String
     let language: String
+    // Per-segment whisper output, populated only when AppDefaults.debugMode is on.
+    // Consumers (TranscriptionQueue) write this alongside the audio file as a
+    // sidecar markdown log so debug data lives in one place on disk.
+    let debugSegments: [DebugSegment]?
+}
+
+struct DebugSegment: Sendable {
+    let index: Int32
+    let startSeconds: Double
+    let endSeconds: Double
+    let noSpeechProb: Float
+    let text: String
 }
 
 enum TranscriberError: Error {
@@ -116,7 +128,9 @@ actor Transcriber {
             text = buildPlainText(ctx: ctx)
         }
 
-        return TranscriptionResult(text: text, language: language)
+        let debugSegments: [DebugSegment]? = AppDefaults.debugMode ? collectDebugSegments(ctx: ctx) : nil
+
+        return TranscriptionResult(text: text, language: language, debugSegments: debugSegments)
     }
 
     func tokenCount(for text: String) throws -> Int {
@@ -126,6 +140,31 @@ actor Transcriber {
 
     func unload() {
         context = nil
+    }
+
+    private func collectDebugSegments(ctx: OpaquePointer) -> [DebugSegment] {
+        let n = whisper_full_n_segments(ctx)
+        var out: [DebugSegment] = []
+        out.reserveCapacity(Int(n))
+        for i in 0..<n {
+            let t0 = Double(whisper_full_get_segment_t0(ctx, i)) / 100.0
+            let t1 = Double(whisper_full_get_segment_t1(ctx, i)) / 100.0
+            let noSpeechProb = whisper_full_get_segment_no_speech_prob(ctx, i)
+            let text: String
+            if let cString = whisper_full_get_segment_text(ctx, i) {
+                text = String(cString: cString)
+            } else {
+                text = ""
+            }
+            out.append(DebugSegment(
+                index: i,
+                startSeconds: t0,
+                endSeconds: t1,
+                noSpeechProb: noSpeechProb,
+                text: text
+            ))
+        }
+        return out
     }
 
     private static let noSpeechThreshold: Float = 0.6

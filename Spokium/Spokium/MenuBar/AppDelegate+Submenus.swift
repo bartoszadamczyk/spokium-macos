@@ -69,4 +69,58 @@ extension AppDelegate {
         let manager = ModelManager()
         manager.selectedModelName = name
     }
+
+    func refreshRecentTranscriptsMenu() {
+        recentTranscriptsItem.isHidden = !AppDefaults.keepRecentTranscripts
+        guard AppDefaults.keepRecentTranscripts else { return }
+
+        // Prune expired entries lazily on open so the user never sees a stale list.
+        controller.history.prune()
+        recentTranscriptsMenu.removeAllItems()
+        let entries = controller.history.entries
+
+        if entries.isEmpty {
+            let empty = NSMenuItem(title: "No recent transcripts", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            recentTranscriptsMenu.addItem(empty)
+        } else {
+            for entry in entries {
+                let item = NSMenuItem(
+                    title: entry.preview,
+                    action: #selector(copyRecentTranscript(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = entry.text
+                item.toolTip = entry.text
+                recentTranscriptsMenu.addItem(item)
+            }
+        }
+
+        recentTranscriptsMenu.addItem(.separator())
+        let clear = NSMenuItem(
+            title: "Clear History",
+            action: #selector(clearRecentTranscripts),
+            keyEquivalent: ""
+        )
+        clear.target = self
+        clear.isEnabled = !entries.isEmpty
+        recentTranscriptsMenu.addItem(clear)
+    }
+
+    @objc func copyRecentTranscript(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        recordingOverlay.showFeedback(.copied, controller: controller)
+    }
+
+    @objc func clearRecentTranscripts() {
+        controller.history.clear()
+    }
+
+    @objc func revealDebugFolder() {
+        DebugRecordingStore.revealInFinder()
+    }
 }

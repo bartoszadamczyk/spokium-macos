@@ -8,6 +8,7 @@ struct GeneralTab: View {
     @AppStorage(DefaultsKey.selectedInputDevice) private var selectedInputDevice = AppDefaults.selectedInputDeviceDefault
     @AppStorage(DefaultsKey.pushToRecord) private var pushToRecord = AppDefaults.pushToRecordDefault
     @AppStorage(DefaultsKey.playSounds) private var playSounds = AppDefaults.playSoundsDefault
+    @AppStorage(DefaultsKey.keepRecentTranscripts) private var keepRecentTranscripts = AppDefaults.keepRecentTranscriptsDefault
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
@@ -45,6 +46,10 @@ struct GeneralTab: View {
                     controller.switchInputDevice(uid: newUID)
                 }
                 Toggle("Play sound effects", isOn: $playSounds)
+                Toggle("Keep recent transcripts (5 min, memory only)", isOn: $keepRecentTranscripts)
+                    .onChange(of: keepRecentTranscripts) { _, newValue in
+                        if !newValue { controller.history.clear() }
+                    }
             }
         }
         .formStyle(.grouped)

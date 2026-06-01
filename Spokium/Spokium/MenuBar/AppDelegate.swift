@@ -15,6 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var queueStatusItem: NSMenuItem!
     var inputDeviceMenu: NSMenu!
     var modelMenu: NSMenu!
+    var recentTranscriptsItem: NSMenuItem!
+    var recentTranscriptsMenu: NSMenu!
+    var revealDebugFolderItem: NSMenuItem!
+    var defaultsObserver: NSObjectProtocol?
     var errorRowItem: NSMenuItem!
     var errorActionItem: NSMenuItem!
     var disableAutoPasteItem: NSMenuItem!
@@ -33,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         cleanStaleTempFiles()
+        DebugRecordingStore.cleanIfDisabled()
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.menu = buildMenu()
@@ -43,6 +48,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         observeErrors()
         observePersistentError()
         observeStateForInputDeviceMenu()
+        observeDebugModeChanges()
+    }
+
+    private func observeDebugModeChanges() {
+        // UserDefaults.didChangeNotification fires on any change to standard defaults.
+        // We don't filter by key — just re-evaluate debug mode every time. Clean-up
+        // and menu-visibility refresh are both idempotent.
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: UserDefaults.standard,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                DebugRecordingStore.cleanIfDisabled()
+                self?.revealDebugFolderItem?.isHidden = !AppDefaults.debugMode
+            }
+        }
     }
 
     private func observeStateForInputDeviceMenu() {

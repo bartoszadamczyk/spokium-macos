@@ -19,7 +19,7 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 - **Paste feedback overlay.** After transcription the HUD briefly confirms the outcome — "Pasted" when auto-paste fires, "Copied to clipboard" when auto-paste is off, and "No speech detected" (with a soft chime) when the transcript came back empty. No transcript content is stored.
 - **Accessibility preflight.** Settings → Transcription shows live paste readiness (granted / required) with a "Request Permission" button. The paste pipeline also preflights `AXIsProcessTrusted` before synthesizing ⌘V — without permission the transcript is left on the clipboard instead of dropping silently.
 - **Persistent error row in the menu.** The status menu keeps a non-sensitive error message until the user dismisses it. For paste-permission failures it also surfaces "Open Accessibility Settings…" and a one-shot "Turn Off Auto-paste" remediation, so users can recover without digging through Settings.
-- **No transcription history.** Nothing is saved to disk after the paste. Logs do not include transcribed content.
+- **No transcription history on disk.** Nothing is saved to disk after the paste. Logs do not include transcribed content. An *opt-in* "Keep recent transcripts" toggle (off by default, in Settings → General) keeps the last 5 transcripts **in memory only** for 5 minutes so you can re-copy one if the paste landed in the wrong window. The history is cleared on app quit, manually via "Clear History" in the menu bar, and never touches disk.
 
 ## Non-goals
 
@@ -100,6 +100,29 @@ SPM dependency to add (File → Add Package Dependencies):
 - `https://github.com/sindresorhus/KeyboardShortcuts` — global hotkey support, attached to the Spokium target
 
 Framework to add: see § *Building from source* below.
+
+## Debug mode (developers only)
+
+Hidden developer affordance for diagnosing whisper hallucinations, repetition loops, and false-positive "no speech detected" cases. **Not exposed in Settings** — enable from the terminal:
+
+```sh
+defaults write com.spokium.mac debugMode -bool true
+```
+
+When on:
+- Each transcription's audio file is **moved** to `~/Library/Containers/com.spokium.mac/Data/Library/Application Support/Spokium/debug-recordings/` instead of being deleted. The folder is size-capped at 100 MB (oldest files dropped first).
+- A markdown sidecar (`{audio-basename}.md`) is written next to each audio file containing the per-segment whisper output: start/end timestamps, `no_speech_prob`, and the raw text. QuickLook-friendly; renders as a table in any markdown viewer.
+- A **"Reveal Debug Folder"** item appears at the bottom of the menu bar dropdown.
+
+No transcript text ever lands in OSLog or any system-wide log path. Everything debug-related sits in the one folder and disappears when you disable the flag.
+
+Disable:
+
+```sh
+defaults write com.spokium.mac debugMode -bool false
+```
+
+On disable, the debug folder is wiped immediately by an in-process observer; a launch-time cleanup catches the case where the flag was flipped while the app wasn't running. Debug data never leaves the sandbox container and is never sent over the network. This is opt-in, sandboxed, and ephemeral by design — see `SECURITY.md` for the threat model.
 
 ## Learning docs
 
