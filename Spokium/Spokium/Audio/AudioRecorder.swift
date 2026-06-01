@@ -115,10 +115,29 @@ final class AudioRecorder {
             engine.stop()
         }
         let url = outputFile?.url
+        // Release AVAudioFile so it flushes its buffers and closes the underlying
+        // file descriptor before we check the on-disk state.
         outputFile = nil
         guard wasRunning else { return nil }
         if writeErrorFlag.failed.load(ordering: .relaxed) {
             logger.error("Audio write errors occurred during recording")
+            return nil
+        }
+        // Verify the file actually made it to disk. AVAudioFile defers some I/O until
+        // it's deallocated, and on very short recordings (or when no buffers ever
+        // reached the tap before stop) the on-disk file can end up missing or empty.
+        // Returning nil here surfaces the existing "Audio recording failed to save"
+        // path instead of silently handing a stale URL to the transcription queue.
+        guard let url else { return nil }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attrs?[.size] as? UInt64) ?? 0
+        if attrs == nil {
+            logger.error("Audio file missing on stop: \(url.lastPathComponent, privacy: .public)")
+            return nil
+        }
+        if size == 0 {
+            logger.error("Audio file empty on stop: \(url.lastPathComponent, privacy: .public)")
+            try? FileManager.default.removeItem(at: url)
             return nil
         }
         return url

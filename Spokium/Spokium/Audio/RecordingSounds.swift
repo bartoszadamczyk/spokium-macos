@@ -6,6 +6,7 @@ enum RecordingSounds {
     private static let startSoundID: SystemSoundID = loadSound(named: "Blow")
     private static let pasteSoundID: SystemSoundID = loadSound(named: "Frog")
     private static let emptySoundID: SystemSoundID = loadSound(named: "Funk")
+    private static let warningSoundID: SystemSoundID = loadSound(named: "Sosumi")
 
     static var enabled: Bool {
         AppDefaults.playSounds
@@ -24,6 +25,11 @@ enum RecordingSounds {
     static func playEmpty() {
         guard enabled else { return }
         AudioServicesPlaySystemSound(emptySoundID)
+    }
+
+    static func playWarning() {
+        guard enabled else { return }
+        AudioServicesPlaySystemSound(warningSoundID)
     }
 
     private static func loadSound(named name: String) -> SystemSoundID {

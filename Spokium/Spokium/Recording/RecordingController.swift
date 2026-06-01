@@ -12,6 +12,7 @@ final class RecordingController {
     var persistentError: RecordingError?
     var lastCompletion: CompletionFeedback?
     var inputLevel: Float = 0
+    var noAudioWarning = false
 
     // Read-only queue/status accessors for the menu bar. Intentionally derived
     // from durations and counts only — never expose transcript content.
@@ -216,9 +217,19 @@ final class RecordingController {
     // Per-segment monitors: level meter, auto-stop deadline. Called at the
     // start of every fresh segment (initial, post-split resume).
     func startSegmentMonitors() {
-        monitors.startLevel(recorder: recorder) { [weak self] level in
-            self?.inputLevel = level
-        }
+        noAudioWarning = false
+        monitors.startLevel(
+            recorder: recorder,
+            onUpdate: { [weak self] level in
+                self?.inputLevel = level
+            },
+            onSilenceDetected: { [weak self] in
+                guard let self else { return }
+                self.logger.warning("No audio detected during recording — check microphone")
+                self.noAudioWarning = true
+                RecordingSounds.playWarning()
+            }
+        )
         monitors.startAutoStop(after: AppDefaults.maxRecordingMinutes) { [weak self] in
             guard let self, case .recording = self.state else { return }
             self.logger.info("Auto-stopping recording (time limit reached)")
@@ -229,6 +240,7 @@ final class RecordingController {
     func stopSegmentMonitors() {
         monitors.stopLevel()
         inputLevel = 0
+        noAudioWarning = false
         monitors.cancelAutoStop()
     }
 
