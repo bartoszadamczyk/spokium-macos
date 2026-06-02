@@ -72,3 +72,13 @@ fastlane/test_output
 
 # Builds
 dist/
+build/
+
+# Claude Code
+.claude
+
+# Docs
+docs/
+
+# Scripts
+scripts/
