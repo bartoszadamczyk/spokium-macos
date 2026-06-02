@@ -1,4 +1,4 @@
-# spokium-macos
+# Spokium for MacOS
 
 A small, native macOS dictation helper. Tap a global keyboard shortcut to start recording, tap again to stop — the transcribed text is pasted into whatever window is focused. Powered by [whisper.cpp](https://github.com/ggml-org/whisper.cpp) running fully on-device.
 
@@ -126,15 +126,6 @@ defaults write com.spokium.mac debugMode -bool false
 
 On disable, the debug folder is wiped immediately by an in-process observer; a launch-time cleanup catches the case where the flag was flipped while the app wasn't running. Debug data never leaves the sandbox container and is never sent over the network. This is opt-in, sandboxed, and ephemeral by design — see `SECURITY.md` for the threat model.
 
-## Learning docs
-
-The `docs/` directory is a local learning companion for this app. Start with:
-
-- `docs/README.md` for the learning path.
-- `docs/swift-code-tour.md` for a code walkthrough.
-- `docs/macos-swift-learning-guide.md` for Swift/macOS concepts mapped to this repo.
-- `docs/code-audit-map.md` and `docs/validation-guide.md` for security and behavior checks.
-
 ## Building from source
 
 The Xcode project links `Spokium/Frameworks/whisper.xcframework`. In this checkout the framework is present and tracked, but it is still treated as a rebuildable artifact from upstream `whisper.cpp`. If the framework is missing, stale, or you want to verify provenance, rebuild it from source:
@@ -176,32 +167,3 @@ cp -R build-apple/whisper.xcframework ~/Codeplace/spokium-macos/Spokium/Framewor
 
 Xcode picks up the updated framework on next build.
 
-## Status
-
-All core functionality is implemented and working:
-
-- [x] **Phase 1** — menu-bar shell. `NSStatusItem` with red pulsing waveform icon while recording, Settings scene with five tabs (General, Transcription, Model, Dictionary, Snippets). Menu bar dropdown also exposes input device and model submenus.
-- [x] **Phase 2** — hotkey + audio capture. `KeyboardShortcuts` SPM, default ⌥Space, toggle or push-to-record mode, `AVAudioEngine` records native-rate `.caf` to the sandbox's tmp dir. Input device selectable from menu bar and Settings.
-- [x] **Phase 3a** — transcription wired. On stop: resample to 16kHz mono → run whisper inference → output text with language detection. Audio file auto-deleted after transcription. Whisper context cached across sessions for fast re-transcription. GPU fallback to CPU if GPU init fails.
-- [x] **Phase 3b** — model picker UI. Settings → Model tab lists 6 models (tiny through large-v3-turbo), downloads from Hugging Face with progress bar, validates with SHA-1 checksums and GGML magic bytes. "Show in Finder" button for manual model management.
-- [x] **Phase 4** — paste pipeline. Save current pasteboard, write transcript, synthesize ⌘V via `CGEvent`, optionally restore previous pasteboard after 150ms. Configurable auto-paste and clipboard restore settings.
-- [x] **Phase 5** — post-processing. Custom dictionary biasing via whisper's `initial_prompt` with real token counting (224 max). Paragraph splitting via RMS-based silence detection on recorded audio (configurable threshold). User-defined snippets find/replace after transcription.
-- [x] **Phase 6** — polish. Pulsing menu bar icon during recording, floating overlay HUD with live audio level meter (mic icon fills red bottom-up) and brief pasted / copied / no-speech-detected confirmation, cancel-anytime via Esc or menu (uses whisper's abort callback for true mid-flight interruption), auto-stop after configurable time limit, error alerts plus a persistent error row in the status menu (no model, mic denied, recording failed, transcription failed, download failed, accessibility missing) with a one-shot "Turn Off Auto-paste" remediation for paste failures, Accessibility-permission preflight in Settings and before each ⌘V synth, launch at login, sound effects, transcription timing logs, settings persistence audit, download validation, temp file cleanup, model directory migration. `LSUIElement` stays enabled so no Dock icon appears.
-- [x] **Phase 7** — distribution scripts. `scripts/release.sh` archives, exports with `method = developer-id`, submits to Apple notarization, staples the app, writes `dist/<version>/`, and installs to `/Applications`. Hardened Runtime is enabled in the target build settings.
-
-### Settings (UserDefaults keys)
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `selectedLanguage` | String | `"auto"` | Whisper language code or `"auto"` for detection |
-| `paragraphSplitting` | Bool | `true` | Insert paragraph breaks on silence gaps |
-| `silenceThreshold` | Double | `3.0` | Seconds of silence to trigger a paragraph break |
-| `autoPaste` | Bool | `true` | Simulate ⌘V after transcription |
-| `preserveClipboard` | Bool | `true` | Restore clipboard after paste |
-| `dictionaryEntries` | String | `""` | Newline-separated custom names/spellings |
-| `selectedModel` | String | (auto) | Name of the selected whisper model |
-| `selectedInputDevice` | String | `""` | Audio input device UID (empty = system default) |
-| `pushToRecord` | Bool | `false` | If true, hold shortcut to record instead of toggle |
-| `playSounds` | Bool | `false` | Play system sound effects for recording start, paste/copy, and empty result |
-| `snippets` | Data (JSON) | `[]` | Array of `{id, trigger, replacement}` for find/replace |
-| `maxRecordingMinutes` | Double | `10` | Auto-stop recording after N minutes (0 = no limit) |
