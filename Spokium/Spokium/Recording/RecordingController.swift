@@ -225,9 +225,14 @@ final class RecordingController {
             },
             onSilenceDetected: { [weak self] in
                 guard let self else { return }
-                self.logger.warning("No audio detected during recording — check microphone")
+                self.logger.warning("No audio detected for 5s — surfacing dead-mic warning")
                 self.noAudioWarning = true
                 RecordingSounds.playWarning()
+            },
+            onAudioResumed: { [weak self] in
+                guard let self else { return }
+                self.logger.info("Audio resumed after dead-mic warning")
+                self.noAudioWarning = false
             }
         )
         monitors.startAutoStop(after: AppDefaults.maxRecordingMinutes) { [weak self] in

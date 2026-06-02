@@ -1,6 +1,9 @@
 import Foundation
+import OSLog
 import Synchronization
 import whisper
+
+nonisolated private let transcriberLogger = Logger(subsystem: "com.spokium.mac", category: "Transcriber")
 
 struct TranscriptionSettings: Sendable {
     var language: String = "auto"
@@ -81,7 +84,6 @@ actor Transcriber {
         settings: TranscriptionSettings = TranscriptionSettings()
     ) throws -> TranscriptionResult {
         let ctx = try loadedContext()
-        abortFlag.value.store(false, ordering: .relaxed)
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_realtime = false
@@ -112,13 +114,23 @@ actor Transcriber {
         defer { free(promptPtr) }
         params.initial_prompt = UnsafePointer(promptPtr)
 
-        let status = samples.withUnsafeBufferPointer { ptr in
-            whisper_full(ctx, params, ptr.baseAddress, Int32(samples.count))
+        try runWhisper(ctx: ctx, samples: samples, params: &params)
+
+        // Loop hallucination guard: greedy sampling occasionally gets stuck
+        // emitting the same segment over and over. Retry once at temperature
+        // 0.4 — whisper.cpp's recommended fallback — and if it *still* loops,
+        // surface no text so the caller hits the .empty completion feedback
+        // rather than pasting a wall of repetition over the user's clipboard.
+        var loopFallbackTriggered = false
+        if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
+            transcriberLogger.warning("Loop hallucination detected; retrying at temperature 0.4")
+            params.temperature = 0.4
+            try runWhisper(ctx: ctx, samples: samples, params: &params)
+            if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
+                transcriberLogger.warning("Loop hallucination persisted after retry; dropping output")
+                loopFallbackTriggered = true
+            }
         }
-        if abortFlag.value.load(ordering: .relaxed) {
-            throw TranscriberError.cancelled
-        }
-        guard status == 0 else { throw TranscriberError.inferenceFailed(status) }
 
         let langId = whisper_full_lang_id(ctx)
         let language: String
@@ -129,7 +141,9 @@ actor Transcriber {
         }
 
         let text: String
-        if settings.paragraphSplitting {
+        if loopFallbackTriggered {
+            text = ""
+        } else if settings.paragraphSplitting {
             let silenceBreaks = SilenceDetector.breaks(
                 samples: samples,
                 sampleRate: 16000,
@@ -143,6 +157,24 @@ actor Transcriber {
         let debugSegments: [DebugSegment]? = AppDefaults.debugMode ? collectDebugSegments(ctx: ctx) : nil
 
         return TranscriptionResult(text: text, language: language, debugSegments: debugSegments)
+    }
+
+    private func runWhisper(ctx: OpaquePointer, samples: [Float], params: inout whisper_full_params) throws {
+        abortFlag.value.store(false, ordering: .relaxed)
+        let status = samples.withUnsafeBufferPointer { ptr in
+            whisper_full(ctx, params, ptr.baseAddress, Int32(samples.count))
+        }
+        if abortFlag.value.load(ordering: .relaxed) {
+            throw TranscriberError.cancelled
+        }
+        guard status == 0 else { throw TranscriberError.inferenceFailed(status) }
+    }
+
+    private func keptSegmentTexts(ctx: OpaquePointer) -> [String] {
+        keptSegmentIndices(ctx: ctx).map { i in
+            guard let cString = whisper_full_get_segment_text(ctx, i) else { return "" }
+            return String(cString: cString)
+        }
     }
 
     func tokenCount(for text: String) throws -> Int {
