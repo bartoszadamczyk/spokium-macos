@@ -29,4 +29,34 @@ nonisolated enum LoopDetector {
         }
         return false
     }
+
+    // Catches the other loop shape: one segment that repeats a short phrase, e.g.
+    // "and then and then and then and then". Words are compared case- and
+    // punctuation-insensitively. A single word needs more repeats than a phrase
+    // because short real repetitions ("no, no, no") do happen.
+    static let singleWordRepeatThreshold = 6
+    static let phraseRepeatThreshold = 4
+    static let maxPhraseLength = 4
+
+    static func hasRepeatedPhrase(_ text: String) -> Bool {
+        let words = text
+            .split(whereSeparator: \.isWhitespace)
+            .map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            .filter { !$0.isEmpty }
+        guard words.count >= phraseRepeatThreshold else { return false }
+
+        for n in 1...maxPhraseLength {
+            let needed = n == 1 ? singleWordRepeatThreshold : phraseRepeatThreshold
+            guard words.count >= n * needed else { continue }
+            for start in 0...(words.count - n * needed) {
+                var repeats = 1
+                while start + (repeats + 1) * n <= words.count,
+                      words[(start + repeats * n)..<(start + (repeats + 1) * n)] == words[start..<(start + n)] {
+                    repeats += 1
+                    if repeats >= needed { return true }
+                }
+            }
+        }
+        return false
+    }
 }

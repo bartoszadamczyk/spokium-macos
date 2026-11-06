@@ -66,6 +66,8 @@ final class RecordingController {
     var pendingAudioSegments: [URL] = []  // accumulated split segments, transcribed as one unit on stop
     var pendingStartCancel = false
     var isResumingAfterSplit = false
+    var stopTailTask: Task<Void, Never>?
+    private var lastToggleAt: ContinuousClock.Instant?
 
     // Per-session accumulated transcripts. Appended by the queue's onComplete
     // callback, drained by finishSession.
@@ -74,6 +76,17 @@ final class RecordingController {
     // Audio-duration accounting for the menu bar status row.
     var currentSegmentStartedAt: ContinuousClock.Instant?
     var pendingSegmentsAudioSeconds: Double = 0  // split segments not yet enqueued
+
+    // Live-transcription session state, driven by RecordingController+Live.
+    var isLiveSession = false
+    var liveSink: LiveSampleSink?
+    var liveChunker = LiveChunker()
+    var liveAssembler: LiveTranscriptAssembler?
+    var livePumpTask: Task<Void, Never>?
+    var liveSessionFiles: [URL] = []
+    var liveDebugSegments: [DebugSegment] = []
+    var liveAudioOffset: Double = 0
+    var liveLanguageCharacters: [String: Int] = [:]
 
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleRecording) { [weak self] in
@@ -118,9 +131,11 @@ final class RecordingController {
         // Halt whisper between graph computations. unload() below serialises after
         // the in-flight transcribe() exits, so it sees the freed-context state.
         queue.abort()
+        stopTailTask?.cancel()
+        stopTailTask = nil
 
         if recorder.isRunning {
-            _ = recorder.stop()
+            _ = await recorder.stop()
             clearCurrentSegment()
         }
 
@@ -131,6 +146,7 @@ final class RecordingController {
         pendingAudioSegments = []
 
         queue.cancelAll()
+        endLiveSession(persistDebug: false)
         history.clear()
         await queue.unload()
     }
@@ -159,6 +175,12 @@ final class RecordingController {
     }
 
     func toggle() {
+        // Rapid start/stop bursts churn AVAudioEngine/aggregate-device setup in coreaudiod
+        // and once wedged it (see AudioRecorder). Nobody toggles deliberately this fast.
+        let now = ContinuousClock.now
+        if let last = lastToggleAt, now - last < .milliseconds(250) { return }
+        lastToggleAt = now
+
         switch state {
         case .idle:
             state = .starting
@@ -181,11 +203,15 @@ final class RecordingController {
         case .recording:
             monitors.stopAll()
             inputLevel = 0
-            _ = recorder.stop()
-            clearCurrentSegment()
+            discardRecorderAsync()
             cancelAllPending()
             logger.info("Recording cancelled")
         case .finishing:
+            if let tail = stopTailTask {
+                tail.cancel()
+                stopTailTask = nil
+                discardRecorderAsync()
+            }
             cancelAllPending()
             logger.info("Transcription cancelled")
         case .idle:
@@ -200,6 +226,7 @@ final class RecordingController {
         currentSegmentStartedAt = nil
         for url in pendingAudioSegments { try? FileManager.default.removeItem(at: url) }
         pendingAudioSegments = []
+        endLiveSession(persistDebug: false)
         state = .idle
         monitors.stopEscape()
     }
@@ -253,6 +280,16 @@ final class RecordingController {
     // splits, stops only when the session fully unwinds.
     func startEscape() {
         monitors.startEscape { [weak self] in self?.cancel() }
+    }
+
+    // Stops the engine off the main thread and deletes the segment it was writing.
+    func discardRecorderAsync() {
+        let url = currentRecordingURL
+        currentRecordingURL = nil
+        Task {
+            _ = await recorder.stop()
+            if let url { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     func clearCurrentSegment() {

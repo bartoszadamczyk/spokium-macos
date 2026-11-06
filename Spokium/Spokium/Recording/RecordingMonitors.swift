@@ -5,7 +5,7 @@ import OSLog
 // Owns the timers/monitors that bracket a recording session:
 //   - level polling (50ms RMS samples → smoothed Float)
 //   - auto-stop deadline
-//   - global Esc keyDown monitor
+//   - global Shift+Esc keyDown monitor (cancel)
 //
 // All callbacks run on MainActor. RecordingController holds one instance and
 // drives starts/stops at the appropriate state-machine transitions.
@@ -105,8 +105,13 @@ final class RecordingMonitors {
 
     func startEscape(onPress: @escaping @MainActor () -> Void) {
         guard escapeMonitor == nil else { return }
+        // Shift+Esc rather than plain Esc: the monitor is global, and a bare Esc pressed
+        // in another app (leaving full screen, closing a dialog) cancelled the recording.
         escapeMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            guard event.keyCode == 53 else { return }
+            let modifiers = event.modifierFlags
+                .intersection(.deviceIndependentFlagsMask)
+                .subtracting([.capsLock, .numericPad, .function])
+            guard event.keyCode == 53, modifiers == .shift else { return }
             Task { @MainActor in onPress() }
         }
     }

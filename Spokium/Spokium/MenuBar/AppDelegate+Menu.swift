@@ -56,8 +56,10 @@ extension AppDelegate {
         cancelMenuItem = NSMenuItem(
             title: "Cancel Recording",
             action: #selector(cancelRecording),
-            keyEquivalent: ""
+            keyEquivalent: "\u{1b}"
         )
+        // Displays ⇧⎋ next to the item; the global monitor handles it while the menu is closed.
+        cancelMenuItem.keyEquivalentModifierMask = [.shift]
         cancelMenuItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
         cancelMenuItem.target = self
         cancelMenuItem.isHidden = true

@@ -2,9 +2,9 @@ import Foundation
 
 // Centralised UserDefaults keys. Use these everywhere instead of string literals
 // — typos become compile errors. Also serves as the canonical list of every
-// persisted setting (see also `Snippets` and `ModelPerformanceStore` which own
-// their own JSON-encoded entries under the `snippets` and `modelPerformance`
-// keys here).
+// persisted setting (see also `Snippets`, `ModelPerformanceStore` and
+// `LanguageUsageStore`, which own their own JSON-encoded entries under the
+// `snippets`, `modelPerformance` and `languageUsage` keys here).
 nonisolated enum DefaultsKey {
     static let selectedLanguage = "selectedLanguage"
     static let paragraphSplitting = "paragraphSplitting"
@@ -20,6 +20,9 @@ nonisolated enum DefaultsKey {
     static let maxRecordingMinutes = "maxRecordingMinutes"
     static let modelPerformance = "modelPerformance"
     static let keepRecentTranscripts = "keepRecentTranscripts"
+    static let liveTranscription = "liveTranscription"
+    static let autoDetectLanguages = "autoDetectLanguages"
+    static let languageUsage = "languageUsage"
     // Hidden developer toggle. No UI surface — enable via terminal:
     //   defaults write com.spokium.mac debugMode -bool true
     static let debugMode = "debugMode"
@@ -42,6 +45,9 @@ nonisolated enum AppDefaults {
     static let playSoundsDefault = false
     static let keepRecentTranscriptsDefault = false
     static let maxRecordingMinutesDefault: Double = 10.0
+    static let liveTranscriptionDefault = true
+    // Comma-separated whisper language codes; empty means "any language".
+    static let autoDetectLanguagesDefault = ""
 
     private static var store: UserDefaults { .standard }
 
@@ -106,6 +112,21 @@ nonisolated enum AppDefaults {
     static var maxRecordingMinutes: Double {
         get { store.object(forKey: DefaultsKey.maxRecordingMinutes) as? Double ?? maxRecordingMinutesDefault }
         set { store.set(newValue, forKey: DefaultsKey.maxRecordingMinutes) }
+    }
+
+    static var liveTranscription: Bool {
+        get { store.object(forKey: DefaultsKey.liveTranscription) as? Bool ?? liveTranscriptionDefault }
+        set { store.set(newValue, forKey: DefaultsKey.liveTranscription) }
+    }
+
+    static var autoDetectLanguages: [String] {
+        get {
+            (store.string(forKey: DefaultsKey.autoDetectLanguages) ?? autoDetectLanguagesDefault)
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }
+        set { store.set(newValue.joined(separator: ","), forKey: DefaultsKey.autoDetectLanguages) }
     }
 
     // Read-only on purpose. Not exposed in Settings; enable via terminal:

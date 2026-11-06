@@ -7,8 +7,16 @@ nonisolated private let transcriberLogger = Logger(subsystem: "com.spokium.mac",
 
 struct TranscriptionSettings: Sendable {
     var language: String = "auto"
+    // With language "auto": the languages the user speaks (e.g. ["pl", "en"]). Auto
+    // results outside this list are re-run with a forced fallback. Empty = accept any.
+    var allowedLanguages: [String] = []
+    // Preferred fallback for the above, e.g. the dominant language of the session so far.
+    var fallbackLanguage: String?
     var paragraphSplitting: Bool = true
     var minSilenceDuration: Double = 3.0
+    // Per-token timing, needed by LiveTranscriptAssembler to de-duplicate overlapped
+    // chunk seams. Off by default since it costs a little extra decode time.
+    var wordTimestamps: Bool = false
 }
 
 struct TranscriptionResult: Sendable {
@@ -18,6 +26,8 @@ struct TranscriptionResult: Sendable {
     // Consumers (TranscriptionQueue) write this alongside the audio file as a
     // sidecar markdown log so debug data lives in one place on disk.
     let debugSegments: [DebugSegment]?
+    // Populated only when TranscriptionSettings.wordTimestamps is set.
+    var words: [TimedWord] = []
 }
 
 struct DebugSegment: Sendable {
@@ -52,8 +62,14 @@ private final class WhisperContext: @unchecked Sendable {
     deinit { whisper_free(pointer) }
 }
 
-private final class AbortFlag: Sendable {
-    let value = Atomic<Bool>(false)
+// abort() bumps `epoch`; each whisper run is armed with the epoch its caller captured
+// before loading audio. Comparing the two (rather than resetting a Bool at run start)
+// means an abort that lands before the run begins is never lost, and a new run can't
+// un-abort one that's still in flight.
+private nonisolated final class AbortFlag: Sendable {
+    let epoch = Atomic<Int>(0)
+    let armed = Atomic<Int>(0)
+    var isAborted: Bool { epoch.load(ordering: .relaxed) != armed.load(ordering: .relaxed) }
 }
 
 actor Transcriber {
@@ -66,7 +82,11 @@ actor Transcriber {
     }
 
     nonisolated func abort() {
-        abortFlag.value.store(true, ordering: .relaxed)
+        abortFlag.epoch.add(1, ordering: .relaxed)
+    }
+
+    nonisolated func abortToken() -> Int {
+        abortFlag.epoch.load(ordering: .relaxed)
     }
 
     func transcribe(
@@ -74,15 +94,19 @@ actor Transcriber {
         initialPrompt: String? = nil,
         settings: TranscriptionSettings = TranscriptionSettings()
     ) throws -> TranscriptionResult {
+        let token = abortToken()
         let samples = try AudioLoader.loadResampled(url: audioURL)
-        return try transcribe(samples: samples, initialPrompt: initialPrompt, settings: settings)
+        return try transcribe(samples: samples, initialPrompt: initialPrompt, settings: settings, abortToken: token)
     }
 
     func transcribe(
         samples: [Float],
         initialPrompt: String? = nil,
-        settings: TranscriptionSettings = TranscriptionSettings()
+        settings: TranscriptionSettings = TranscriptionSettings(),
+        abortToken: Int? = nil
     ) throws -> TranscriptionResult {
+        abortFlag.armed.store(abortToken ?? self.abortToken(), ordering: .relaxed)
+        if abortFlag.isAborted { throw TranscriberError.cancelled }
         let ctx = try loadedContext()
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
@@ -91,23 +115,20 @@ actor Transcriber {
         params.print_timestamps = false
         params.no_context = true
         params.translate = false
+        params.token_timestamps = settings.wordTimestamps
         params.n_threads = Int32(min(8, ProcessInfo.processInfo.activeProcessorCount))
 
         params.abort_callback = { userData in
             guard let userData else { return false }
             let flag = Unmanaged<AbortFlag>.fromOpaque(userData).takeUnretainedValue()
-            return flag.value.load(ordering: .relaxed)
+            return flag.isAborted
         }
         params.abort_callback_user_data = Unmanaged.passUnretained(abortFlag).toOpaque()
 
-        let langPtr: UnsafeMutablePointer<CChar>?
-        if settings.language == "auto" {
-            langPtr = nil
-            params.language = nil
-        } else {
-            langPtr = strdup(settings.language)
-            params.language = UnsafePointer(langPtr)
-        }
+        // "auto" is passed through unforced: the decoder can then keep mixed-language
+        // speech in both languages. Forcing a language makes it translate the rest.
+        var langPtr: UnsafeMutablePointer<CChar>? = settings.language == "auto" ? nil : strdup(settings.language)
+        params.language = UnsafePointer(langPtr)
         defer { free(langPtr) }
 
         let promptPtr = initialPrompt.flatMap { strdup($0) }
@@ -116,14 +137,37 @@ actor Transcriber {
 
         try runWhisper(ctx: ctx, samples: samples, params: &params)
 
+        // Defensive fallback: only when auto-detect lands on a language the user doesn't
+        // speak (typically a short or quiet chunk tagged as e.g. Turkish) do we re-run
+        // with a forced language — the session's dominant one if known, otherwise the
+        // most probable language from the user's list.
+        if settings.language == "auto", !settings.allowedLanguages.isEmpty {
+            let detected = whisper_lang_str(whisper_full_lang_id(ctx)).map { String(cString: $0) } ?? "unknown"
+            if !settings.allowedLanguages.contains(detected) {
+                let fallback = settings.fallbackLanguage.flatMap { settings.allowedLanguages.contains($0) ? $0 : nil }
+                    ?? restrictedDetection(ctx: ctx, samples: samples, allowed: settings.allowedLanguages, threads: params.n_threads)
+                if let fallback {
+                    transcriberLogger.info("Auto-detected \(detected, privacy: .public) is outside \(settings.allowedLanguages.joined(separator: ","), privacy: .public); re-running as \(fallback, privacy: .public)")
+                    free(langPtr)
+                    langPtr = strdup(fallback)
+                    params.language = UnsafePointer(langPtr)
+                    try runWhisper(ctx: ctx, samples: samples, params: &params)
+                }
+            }
+        }
+
         // Loop hallucination guard: greedy sampling occasionally gets stuck
         // emitting the same segment over and over. Retry once at temperature
         // 0.4 — whisper.cpp's recommended fallback — and if it *still* loops,
         // surface no text so the caller hits the .empty completion feedback
         // rather than pasting a wall of repetition over the user's clipboard.
+        // A phrase repeated inside one segment also triggers the retry, but if it
+        // persists we keep the retry's text — it's usually mostly right, unlike the
+        // segment-level loop which tends to replace real speech wholesale.
         var loopFallbackTriggered = false
-        if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
-            transcriberLogger.warning("Loop hallucination detected; retrying at temperature 0.4")
+        let segmentLoop = LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx))
+        if segmentLoop || LoopDetector.hasRepeatedPhrase(keptSegmentTexts(ctx: ctx).joined(separator: " ")) {
+            transcriberLogger.warning("Loop hallucination detected (segmentLoop=\(segmentLoop)); retrying at temperature 0.4")
             params.temperature = 0.4
             try runWhisper(ctx: ctx, samples: samples, params: &params)
             if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
@@ -156,15 +200,75 @@ actor Transcriber {
 
         let debugSegments: [DebugSegment]? = AppDefaults.debugMode ? collectDebugSegments(ctx: ctx) : nil
 
-        return TranscriptionResult(text: text, language: language, debugSegments: debugSegments)
+        var result = TranscriptionResult(text: text, language: language, debugSegments: debugSegments)
+        if settings.wordTimestamps, !loopFallbackTriggered {
+            result.words = collectWords(ctx: ctx)
+        }
+        return result
+    }
+
+    // Groups tokens into words by their leading space. Token text is accumulated as raw
+    // bytes because whisper can split a multi-byte UTF-8 character (e.g. Polish "ł")
+    // across tokens, and decoding each token on its own would corrupt it.
+    private func collectWords(ctx: OpaquePointer) -> [TimedWord] {
+        let eot = whisper_token_eot(ctx)
+        var words: [TimedWord] = []
+        var bytes: [UInt8] = []
+        var start: Double = 0
+
+        func flush() {
+            guard !bytes.isEmpty else { return }
+            words.append(TimedWord(text: String(decoding: bytes, as: UTF8.self), start: start))
+            bytes = []
+        }
+
+        for i in keptSegmentIndices(ctx: ctx) {
+            for j in 0..<whisper_full_n_tokens(ctx, i) {
+                guard whisper_full_get_token_id(ctx, i, j) < eot,
+                      let cText = whisper_full_get_token_text(ctx, i, j)
+                else { continue }
+                let tokenBytes = Array(UnsafeBufferPointer(start: UnsafeRawPointer(cText).assumingMemoryBound(to: UInt8.self), count: strlen(cText)))
+                guard !tokenBytes.isEmpty else { continue }
+                if tokenBytes.first == UInt8(ascii: " ") || bytes.isEmpty {
+                    flush()
+                    start = Double(whisper_full_get_token_t0(ctx, i, j)) / 100.0
+                }
+                bytes.append(contentsOf: tokenBytes)
+            }
+        }
+        flush()
+        return words
+    }
+
+    // Scores all languages and returns the most probable one from `allowed`, or nil if
+    // detection fails. Costs one extra encoder pass, so it's only used as a fallback.
+    private func restrictedDetection(ctx: OpaquePointer, samples: [Float], allowed: [String], threads: Int32) -> String? {
+        guard !allowed.isEmpty else { return nil }
+        if allowed.count == 1 { return allowed[0] }
+
+        let melStatus = samples.withUnsafeBufferPointer {
+            whisper_pcm_to_mel(ctx, $0.baseAddress, Int32(samples.count), threads)
+        }
+        guard melStatus == 0 else { return nil }
+
+        var probs = [Float](repeating: 0, count: Int(whisper_lang_max_id()) + 1)
+        guard whisper_lang_auto_detect(ctx, 0, threads, &probs) >= 0 else { return nil }
+
+        var byCode: [String: Float] = [:]
+        for code in allowed {
+            let id = Int(whisper_lang_id(code))
+            if id >= 0, id < probs.count { byCode[code] = probs[id] }
+        }
+        let chosen = LanguageChooser.best(probabilities: byCode, allowed: allowed)
+        transcriberLogger.info("Restricted language detection: \(chosen ?? "none", privacy: .public) among \(allowed.joined(separator: ","), privacy: .public)")
+        return chosen
     }
 
     private func runWhisper(ctx: OpaquePointer, samples: [Float], params: inout whisper_full_params) throws {
-        abortFlag.value.store(false, ordering: .relaxed)
         let status = samples.withUnsafeBufferPointer { ptr in
             whisper_full(ctx, params, ptr.baseAddress, Int32(samples.count))
         }
-        if abortFlag.value.load(ordering: .relaxed) {
+        if abortFlag.isAborted {
             throw TranscriberError.cancelled
         }
         guard status == 0 else { throw TranscriberError.inferenceFailed(status) }
@@ -211,13 +315,28 @@ actor Transcriber {
         return out
     }
 
-    private static let noSpeechThreshold: Float = 0.6
-
     private func keptSegmentIndices(ctx: OpaquePointer) -> [Int32] {
         let n = whisper_full_n_segments(ctx)
         return (0..<n).filter { i in
-            whisper_full_get_segment_no_speech_prob(ctx, i) <= Self.noSpeechThreshold
+            !NoSpeechFilter.shouldDrop(
+                noSpeechProb: whisper_full_get_segment_no_speech_prob(ctx, i),
+                averageLogProb: averageLogProb(ctx: ctx, segment: i)
+            )
         }
+    }
+
+    private func averageLogProb(ctx: OpaquePointer, segment: Int32) -> Float? {
+        let eot = whisper_token_eot(ctx)
+        var sum: Float = 0
+        var count = 0
+        for j in 0..<whisper_full_n_tokens(ctx, segment) {
+            guard whisper_full_get_token_id(ctx, segment, j) < eot else { continue }
+            let p = whisper_full_get_token_p(ctx, segment, j)
+            guard p > 0 else { continue }
+            sum += log(p)
+            count += 1
+        }
+        return count > 0 ? sum / Float(count) : nil
     }
 
     private func buildPlainText(ctx: OpaquePointer) -> String {

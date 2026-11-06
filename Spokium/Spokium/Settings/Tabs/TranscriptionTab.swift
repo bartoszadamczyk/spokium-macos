@@ -8,6 +8,41 @@ struct TranscriptionTab: View {
     @AppStorage(DefaultsKey.autoPaste) private var autoPaste = AppDefaults.autoPasteDefault
     @AppStorage(DefaultsKey.preserveClipboard) private var preserveClipboard = AppDefaults.preserveClipboardDefault
     @AppStorage(DefaultsKey.maxRecordingMinutes) private var maxRecordingMinutes = AppDefaults.maxRecordingMinutesDefault
+    @AppStorage(DefaultsKey.liveTranscription) private var liveTranscription = AppDefaults.liveTranscriptionDefault
+    @AppStorage(DefaultsKey.autoDetectLanguages) private var autoDetectLanguages = AppDefaults.autoDetectLanguagesDefault
+    @State private var languageUsage: [String: Int] = [:]
+
+    private var selectedDetectCodes: [String] {
+        autoDetectLanguages.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+    }
+
+    private var detectAmongLabel: String {
+        let codes = selectedDetectCodes
+        guard !codes.isEmpty else { return "Any language" }
+        let names = WhisperLanguage.all.filter { codes.contains($0.code) }.map(\.displayName)
+        return names.formatted(.list(type: .and))
+    }
+
+    private var usageSummary: String {
+        LanguageUsageStore.shares(languageUsage)
+            .prefix(4)
+            .map { share in
+                let name = WhisperLanguage.all.first { $0.code == share.code }?.displayName ?? share.code
+                return "\(name) \(share.fraction.formatted(.percent.precision(.fractionLength(0))))"
+            }
+            .joined(separator: " · ")
+    }
+
+    private func detectBinding(for code: String) -> Binding<Bool> {
+        Binding(
+            get: { selectedDetectCodes.contains(code) },
+            set: { isOn in
+                var codes = selectedDetectCodes.filter { $0 != code }
+                if isOn { codes.append(code) }
+                autoDetectLanguages = codes.joined(separator: ",")
+            }
+        )
+    }
 
     var body: some View {
         Form {
@@ -19,6 +54,33 @@ struct TranscriptionTab: View {
                         Text(lang.displayName).tag(lang.code)
                     }
                 }
+                if selectedLanguage == "auto" {
+                    LabeledContent("Languages I speak:") {
+                        Menu(detectAmongLabel) {
+                            Button("Any language") { autoDetectLanguages = "" }
+                            Divider()
+                            ForEach(WhisperLanguage.all) { lang in
+                                Toggle(lang.displayName, isOn: detectBinding(for: lang.code))
+                            }
+                        }
+                        .fixedSize()
+                    }
+                    .help("Auto-detect still runs freely, so mixed-language speech stays mixed. Only when it detects a language outside this list (typical for short or quiet phrases) is that part re-transcribed in the language you've used most in the current recording.")
+                    if !languageUsage.isEmpty {
+                        LabeledContent("Your usage:") {
+                            HStack {
+                                Text(usageSummary)
+                                    .foregroundStyle(.secondary)
+                                Button("Reset") {
+                                    LanguageUsageStore.reset()
+                                    languageUsage = [:]
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                        .help("Characters transcribed per detected language, across all recordings. Only counts are stored — never text. Used as the fallback language when a recording has no history yet.")
+                    }
+                }
                 Picker("Auto-stop after:", selection: $maxRecordingMinutes) {
                     Text("1 minute").tag(1.0)
                     Text("2 minutes").tag(2.0)
@@ -27,6 +89,10 @@ struct TranscriptionTab: View {
                     Text("30 minutes").tag(30.0)
                     Divider()
                     Text("No limit").tag(0.0)
+                }
+                Toggle(isOn: $liveTranscription) {
+                    Text("Transcribe while recording")
+                    Text("Processes speech in short chunks as you talk, so long recordings paste almost immediately.")
                 }
                 Toggle("Split paragraphs on silence", isOn: $paragraphSplitting)
                 if paragraphSplitting {
@@ -48,6 +114,7 @@ struct TranscriptionTab: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { languageUsage = LanguageUsageStore.all() }
     }
 }
 

@@ -98,4 +98,24 @@ struct LoopDetectorTests {
         ]
         #expect(LoopDetector.hasLoop(segmentTexts: texts) == false)
     }
+
+    @Test
+    func repeatedSingleWordIsPhraseLoop() {
+        #expect(LoopDetector.hasRepeatedPhrase("I said the the the the the the end") == true)
+    }
+
+    @Test
+    func repeatedShortPhraseIsPhraseLoop() {
+        #expect(LoopDetector.hasRepeatedPhrase("And then, and then, and then, and then we left.") == true)
+    }
+
+    @Test
+    func naturalRepetitionIsNotPhraseLoop() {
+        #expect(LoopDetector.hasRepeatedPhrase("No, no, no. That is very very good.") == false)
+    }
+
+    @Test
+    func phraseBelowThresholdIsNotLoop() {
+        #expect(LoopDetector.hasRepeatedPhrase("go home go home go home now") == false)
+    }
 }

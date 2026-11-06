@@ -17,26 +17,31 @@ extension RecordingController {
             return
         }
 
+        // Set before the async stop so config-change notifications arriving meanwhile
+        // are dropped; resumeRecordingAfterSplit manages it from there.
+        isResumingAfterSplit = true
         stopSegmentMonitors()
-
         currentSegmentStartedAt = nil
-        if let url = recorder.stop() {
-            currentRecordingURL = nil
-            let duration = audioDuration(at: url)
-            if duration >= 0.25 {
-                pendingAudioSegments.append(url)
-                pendingSegmentsAudioSeconds += duration
-            } else {
-                // Continuity Mic can "start" before producing audio, leaving a header-only
-                // file behind when the next config-change notification splits us again.
-                logger.info("Discarding empty split segment \(url.lastPathComponent, privacy: .public)")
-                try? FileManager.default.removeItem(at: url)
-            }
-        } else {
-            clearCurrentSegment()
-        }
 
-        Task { await self.resumeRecordingAfterSplit() }
+        Task {
+            if let url = await recorder.stop() {
+                currentRecordingURL = nil
+                let duration = audioDuration(at: url)
+                if duration >= 0.25 {
+                    pendingAudioSegments.append(url)
+                    pendingSegmentsAudioSeconds += duration
+                } else {
+                    // Continuity Mic can "start" before producing audio, leaving a header-only
+                    // file behind when the next config-change notification splits us again.
+                    logger.info("Discarding empty split segment \(url.lastPathComponent, privacy: .public)")
+                    try? FileManager.default.removeItem(at: url)
+                }
+            } else {
+                clearCurrentSegment()
+            }
+            isResumingAfterSplit = false
+            await resumeRecordingAfterSplit()
+        }
     }
 
     // Called when system audio config changes (device plugged/unplugged) OR when user

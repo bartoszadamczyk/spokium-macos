@@ -2,15 +2,31 @@ import AppKit
 import SwiftUI
 
 struct SettingsSceneRoot: View {
+    let controller: RecordingController
+
     var body: some View {
-        if let controller = (NSApp.delegate as? AppDelegate)?.controller {
-            SettingsView()
-                .environment(controller)
-        } else {
-            Text("Settings unavailable")
-                .foregroundStyle(.secondary)
-                .frame(width: 600, height: 400)
+        SettingsView()
+            .environment(controller)
+            .modifier(DevBuildBanner())
+    }
+}
+
+// Marks the dev build's settings so they aren't mistaken for production's — the two
+// apps have separate defaults, models and dictionary.
+private struct DevBuildBanner: ViewModifier {
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Text("DEV BUILD · \(Bundle.main.bundleIdentifier ?? "")")
+                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(.orange)
+                .foregroundStyle(.black)
         }
+        #else
+        content
+        #endif
     }
 }
 

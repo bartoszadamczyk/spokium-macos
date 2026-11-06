@@ -29,10 +29,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var pulseOn = true
     var queueStatusTimer: Timer?
 
-    let settingsScene = NSHostingSceneRepresentation {
+    // Must be registered via addSceneRepresentation before launch finishes, otherwise
+    // environment.openSettings() has no scene to present and silently does nothing.
+    lazy var settingsScene = NSHostingSceneRepresentation {
         Settings {
-            SettingsSceneRoot()
+            SettingsSceneRoot(controller: self.controller)
         }
+    }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApplication.shared.addSceneRepresentation(settingsScene)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -146,11 +152,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsScene.environment.openSettings()
         NSApp.activate(ignoringOtherApps: true)
 
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            for window in NSApp.windows where window.canBecomeMain {
-                window.makeKeyAndOrderFront(nil)
+        // For an LSUIElement app, openSettings() creates the window but leaves it
+        // ordered out, and SwiftUI's Settings window reports canBecomeMain == false,
+        // so it has to be found by identifier and brought forward explicitly. On
+        // first open the window appears a run-loop turn or two later, hence the retry.
+        Task { @MainActor in
+            for _ in 0..<10 {
+                if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == Self.settingsWindowID }) {
+                    NSApp.activate(ignoringOtherApps: true)
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(50))
             }
         }
     }
+
+    private static let settingsWindowID = "com_apple_SwiftUI_Settings_window"
 }

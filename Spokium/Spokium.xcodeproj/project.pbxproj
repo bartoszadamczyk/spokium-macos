@@ -37,9 +37,18 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		13DF20CAF9BB5C2BF926A0CF /* APP_REVIEW_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = APP_REVIEW_IDEAS.md; path = ../APP_REVIEW_IDEAS.md; sourceTree = "<group>"; };
+		28E4AD8BDA69DCE8AEA6D60B /* DEV.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = DEV.md; path = ../DEV.md; sourceTree = "<group>"; };
+		34BE5C336C5E01C71F646C10 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = SECURITY.md; path = ../SECURITY.md; sourceTree = "<group>"; };
+		447C31C863FD70069F925D46 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = AGENTS.md; path = ../AGENTS.md; sourceTree = "<group>"; };
 		981E84552FCA46B300AF1975 /* SpokiumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpokiumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9855A2E22FAFE6BB003A6A5D /* Spokium.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spokium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		98C9503B2FAFED120018AD75 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
+		B2F24B9D720E7C0E5326507D /* plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = plan.md; path = ../plan.md; sourceTree = "<group>"; };
+		C11BC2818A68C63B37F9C1D4 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
+		DD033029DE0F5769BF50CB37 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE.txt; path = ../LICENSE.txt; sourceTree = "<group>"; };
+		DDD447247B54344E22A0D454 /* REJECTED_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = REJECTED_IDEAS.md; path = ../REJECTED_IDEAS.md; sourceTree = "<group>"; };
+		F9E9308EE3C7381D5C4B0BA9 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +84,26 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		04F4F22F7F4ACF54BAC4B3B8 /* Docs */ = {
+			isa = PBXGroup;
+			children = (
+				C11BC2818A68C63B37F9C1D4 /* README.md */,
+				447C31C863FD70069F925D46 /* AGENTS.md */,
+				28E4AD8BDA69DCE8AEA6D60B /* DEV.md */,
+				B2F24B9D720E7C0E5326507D /* plan.md */,
+				13DF20CAF9BB5C2BF926A0CF /* APP_REVIEW_IDEAS.md */,
+				DD033029DE0F5769BF50CB37 /* LICENSE.txt */,
+				DDD447247B54344E22A0D454 /* REJECTED_IDEAS.md */,
+				34BE5C336C5E01C71F646C10 /* SECURITY.md */,
+				F9E9308EE3C7381D5C4B0BA9 /* THIRD_PARTY_NOTICES.md */,
+			);
+			name = Docs;
+			sourceTree = "<group>";
+		};
 		9855A2D92FAFE6BB003A6A5D = {
 			isa = PBXGroup;
 			children = (
+				04F4F22F7F4ACF54BAC4B3B8 /* Docs */,
 				9855A2E42FAFE6BB003A6A5D /* Spokium */,
 				981E84562FCA46B300AF1975 /* SpokiumTests */,
 				9855A2E32FAFE6BB003A6A5D /* Products */,
@@ -257,11 +283,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 22;
 				DEVELOPMENT_TEAM = 6J9C6FCCS5;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -278,11 +304,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 22;
 				DEVELOPMENT_TEAM = 6J9C6FCCS5;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -429,7 +455,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 22;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -447,7 +473,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Spokium;
+				INFOPLIST_KEY_CFBundleDisplayName = "Spokium Dev";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -457,8 +483,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.3.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac;
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -485,7 +511,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 22;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -513,7 +539,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.3.2;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

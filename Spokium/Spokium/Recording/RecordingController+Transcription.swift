@@ -20,11 +20,14 @@ extension RecordingController {
             return
         }
 
+        beginLiveSessionIfEnabled()
         await startSegment(playSound: true)
     }
 
     // Starts a new recording segment within the current session (transcription still running)
     func continueSession() {
+        // Still capturing the stop tail of the previous recording; the recorder is busy.
+        guard stopTailTask == nil else { return }
         let manager = ModelManager()
         guard manager.selectedModelURL != nil else {
             reportError(.noModel)
@@ -42,7 +45,7 @@ extension RecordingController {
         do {
             try await recorder.start(to: url)
             if pendingStartCancel {
-                _ = recorder.stop()
+                _ = await recorder.stop()
                 clearCurrentSegment()
                 returnFromRecording()
                 logger.info("Recording start cancelled")
@@ -53,6 +56,7 @@ extension RecordingController {
             currentSegmentStartedAt = .now
             startSegmentMonitors()
             startEscape()
+            startLivePump()
             if playSound { RecordingSounds.playStart() }
             logger.info("Recording segment started")
         } catch AudioRecorderError.microphoneDenied {
@@ -67,13 +71,33 @@ extension RecordingController {
         }
     }
 
+    // Audio still in the tap pipeline when the engine stops is lost, which clipped the
+    // last word when people stop the moment they finish speaking. Keep capturing for a
+    // short tail after the stop request; the UI moves to .finishing immediately.
+    static let stopTail: Duration = .milliseconds(300)
+
     func stop() {
-        guard recorder.isRunning else { return }
+        guard recorder.isRunning, stopTailTask == nil else { return }
 
         state = .finishing
         stopSegmentMonitors()
 
-        let url = recorder.stop()
+        stopTailTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.stopTail)
+            guard let self, !Task.isCancelled else { return }
+            await self.finishStop()
+            self.stopTailTask = nil
+        }
+    }
+
+    private func finishStop() async {
+        let url = await recorder.stop()
+        // Cancelled (Shift+Esc) while the engine was stopping: cancel() already reset the
+        // session, so drop this segment instead of transcribing it.
+        if Task.isCancelled {
+            if let url { try? FileManager.default.removeItem(at: url) }
+            return
+        }
         currentRecordingURL = nil
         currentSegmentStartedAt = nil
 
@@ -81,6 +105,12 @@ extension RecordingController {
         pendingAudioSegments = []
         let priorSegmentsAudio = pendingSegmentsAudioSeconds
         pendingSegmentsAudioSeconds = 0
+
+        if isLiveSession {
+            if let url { segments.append(url) }
+            finishLiveRecording(segmentURLs: segments)
+            return
+        }
 
         if let url {
             segments.append(url)
@@ -106,18 +136,20 @@ extension RecordingController {
             reportError(.noModel)
             return
         }
+        let prompt = dictionaryPrompt()
+        let settings = transcriptionSettings()
         queue.enqueue(
-            urls: urls,
+            source: .files(urls),
             audioSeconds: audioSeconds,
             modelURL: modelURL,
-            initialPrompt: dictionaryPrompt(),
-            settings: transcriptionSettings(),
+            initialPrompt: { prompt },
+            settings: { settings },
             sessionStartedAt: sessionStartedAt,
             onComplete: { [weak self] outcome in
                 guard let self else { return }
                 switch outcome {
-                case .success(let text, _):
-                    if !text.isEmpty { self.sessionTexts.append(text) }
+                case .success(let result):
+                    if !result.text.isEmpty { self.sessionTexts.append(result.text) }
                 case .failure(let error):
                     self.reportError(error)
                 case .cancelled:
@@ -131,14 +163,21 @@ extension RecordingController {
         )
     }
 
-    private func finishSession() {
+    func finishSession() {
         monitors.stopEscape()
 
-        let combined = sessionTexts.joined(separator: " ")
+        let combined: String
+        if isLiveSession {
+            combined = liveAssembler?.text ?? ""
+            endLiveSession(persistDebug: true)
+        } else {
+            combined = sessionTexts.joined(separator: " ")
+        }
         sessionTexts = []
         sessionStartedAt = nil
 
         let finalText = SnippetStore.apply(to: combined)
+        logger.info("Session finished: chars=\(finalText.count)")
         guard !finalText.isEmpty else {
             lastCompletion = .empty
             RecordingSounds.playEmpty()
@@ -152,7 +191,9 @@ extension RecordingController {
 
         Task { [weak self] in
             guard let self else { return }
-            switch await Paster.paste(finalText) {
+            let result = await Paster.paste(finalText)
+            self.logger.info("Paste result: \(String(describing: result), privacy: .public)")
+            switch result {
             case .pasted:
                 self.lastCompletion = .pasted
                 RecordingSounds.playPaste()
@@ -168,15 +209,18 @@ extension RecordingController {
         }
     }
 
-    private func transcriptionSettings() -> TranscriptionSettings {
-        TranscriptionSettings(
+    func transcriptionSettings() -> TranscriptionSettings {
+        let allowed = AppDefaults.selectedLanguage == "auto" ? AppDefaults.autoDetectLanguages : []
+        return TranscriptionSettings(
             language: AppDefaults.selectedLanguage,
+            allowedLanguages: allowed,
+            fallbackLanguage: LanguageChooser.dominant(charactersByLanguage: LanguageUsageStore.all(), allowed: allowed),
             paragraphSplitting: AppDefaults.paragraphSplitting,
             minSilenceDuration: AppDefaults.silenceThreshold
         )
     }
 
-    private func dictionaryPrompt() -> String? {
+    func dictionaryPrompt() -> String? {
         DictionaryPromptBuilder.prompt(from: AppDefaults.dictionaryEntries)
     }
 }
