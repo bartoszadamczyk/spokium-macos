@@ -13,16 +13,16 @@ A native macOS menu-bar dictation app. Tap a global hotkey to start recording, t
 - **Min target:** macOS 26.3. Required for `NSHostingSceneRepresentation` used to open Settings from AppKit menu bar code.
 - **Sandboxed.** The app runs under App Sandbox. Accessibility-driven ⌘V, global hotkeys, and microphone all work in sandbox once the user grants the relevant permissions.
 - **IDE:** Xcode. The project is an Xcode app target, not a SwiftPM executable, because we need an `.app` bundle, `Info.plist`, entitlements, and a menu-bar `LSUIElement` flag.
-- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) via `Spokium/Frameworks/whisper.xcframework`. In this checkout the XCFramework is present and tracked in Git, but it is still a rebuildable artifact from upstream `whisper.cpp`. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Spokium`, so no collision. Models downloaded at runtime, not bundled.
+- **Whisper integration:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) **v1.9.5** via `Spokium/Frameworks/whisper.xcframework`. In this checkout the XCFramework is present and tracked in Git, but it is still a rebuildable artifact: `git clone --branch v1.9.5 https://github.com/ggml-org/whisper.cpp` outside the repo, run `./build-xcframework.sh`, copy `build-apple/whisper.xcframework` over the tracked one. Swift code does `import whisper` (lowercase — that's the module name baked into the upstream xcframework's modulemap). Our app target is `Spokium`, so no collision. Models downloaded at runtime, not bundled.
 - **Global hotkey:** [`KeyboardShortcuts`](https://github.com/sindresorhus/KeyboardShortcuts) SPM package (v2.4.0+). Wraps Carbon `RegisterEventHotKey` and gives us a SwiftUI recorder view for the settings screen. Default: ⌥Space. Supports toggle mode (default) or push-to-record (`onKeyDown` starts, `onKeyUp` stops) via `pushToRecord` UserDefaults flag.
-- **Audio capture:** `AVAudioEngine` with input node tap, writing native-rate CAF to temp directory. Supports user-selectable input device via CoreAudio `AudioUnitSetProperty` (stored as device UID in UserDefaults). Resampled to 16 kHz mono Float32 by `AudioLoader` before transcription.
+- **Audio capture:** `AVAudioEngine` with input node tap, writing native-rate CAF to temp directory. **All engine work runs on `AudioRecorder.engineQueue` (serial, off the main thread)** with a 5 s start / 3 s stop timeout: CoreAudio calls such as the first `engine.inputNode` can block indefinitely when `coreaudiod` is busy (seen after rapid start/stop toggling), which used to freeze the whole app. A start that completes after its timeout is torn down immediately. `AudioRecorder.stop()` is `async`. `toggle()` ignores presses < 250 ms apart. The engine is created per recording and released on stop — a retained engine keeps the HAL input configured and holds Bluetooth headsets in low-quality HFP mode while idle. The tap uses `outputFormat(forBus: 0)` and refuses 0 Hz / 0-channel formats (otherwise `installTap` raises an uncatchable ObjC exception). Supports user-selectable input device via CoreAudio `AudioUnitSetProperty` (stored as device UID in UserDefaults). Resampled to 16 kHz mono Float32 by `AudioLoader` before transcription.
 - **Paste mechanism:** write to `NSPasteboard.general`, synthesize ⌘V via `CGEvent` (key code 9), optionally restore previous pasteboard contents after 150ms delay. Both auto-paste and clipboard restore are user-configurable.
 - **Concurrency:** `actor` for `Transcriber` (whisper context isolation), `@Observable` for UI state (`RecordingController`, `ModelManager`). No Combine — uses Swift async/await throughout.
 
 ## Hard constraints
 
 - **No network calls** for transcription or telemetry. Model downloads from Hugging Face are the only allowed network use.
-- **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count). An opt-in `TranscriptHistory` keeps the last 5 transcripts in memory only when `AppDefaults.keepRecentTranscripts` is true (default false); the store is cleared on `RecordingController.cleanup()` and via the "Clear History" menu item, and never serialised.
+- **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count). `LanguageUsageStore` persists characters-per-language counts (no text) — same posture as `ModelPerformanceStore`. An opt-in `TranscriptHistory` keeps the last 5 transcripts in memory only when `AppDefaults.keepRecentTranscripts` is true (default false); the store is cleared on `RecordingController.cleanup()` and via the "Clear History" menu item, and never serialised.
 - **No dock icon ever.** `LSUIElement = true` is set through generated Info.plist build settings. Settings windows are brought to front via `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront`; do not switch the app to `.regular`.
 - **Restore the pasteboard** after pasting so we don't clobber whatever the user had copied (when enabled in settings).
 
@@ -67,7 +67,7 @@ spokium-macos/
         ├── App/                    # SpokiumApp entry point
         ├── MenuBar/                # AppDelegate (+ Menu/Submenus/StatusItem/Errors extensions),
         │                           #   MenuBarIcon
-        ├── Recording/              # RecordingController (+ Segments/Transcription
+        ├── Recording/              # RecordingController (+ Segments/Transcription/Live
         │                           #   extensions), RecordingMonitors (level/auto-stop/split/Esc
         │                           #   timers), TranscriptionQueue (serial chain + whisper run),
         │                           #   RecordingTypes (state + error enums), RecordingOverlay (HUD)
@@ -76,11 +76,13 @@ spokium-macos/
         │                           #   RecordingSounds
         ├── Transcription/          # Transcriber (whisper.cpp actor), AudioLoader (resampling),
         │                           #   ModelLocator (directory management + migration),
-        │                           #   SilenceDetector + DictionaryPromptBuilder (pure helpers)
+        │                           #   SilenceDetector, DictionaryPromptBuilder, LoopDetector,
+        │                           #   LiveChunker, LiveTranscriptAssembler (pure helpers)
         ├── Hotkey/                 # HotkeyName (KeyboardShortcuts.Name extension)
         ├── Paste/                  # Paster (pasteboard + CGEvent ⌘V simulation)
         ├── Settings/               # ModelManager (download/validate/select models),
-        │   │                       #   ModelPerformanceStore, SettingsView (TabView root),
+        │   │                       #   ModelPerformanceStore, LanguageUsageStore,
+        │   │                       #   SettingsView (TabView root),
         │   │                       #   Snippets (find/replace post-processing)
         │   └── Tabs/               # GeneralTab, TranscriptionTab, ModelTab, DictionaryTab,
         │                           #   SnippetsTab
@@ -92,7 +94,7 @@ spokium-macos/
 ## Key implementation details
 
 ### State machine (RecordingController)
-`idle` → `starting` → `recording` → `finishing` → `idle`. `starting` prevents double-start races while microphone/audio setup is in flight. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit, but quit cleanup still needs a direct `transcriber?.abort()` call and active-recorder stop/delete handling. User can cancel at any state via Esc (global `NSEvent.addGlobalMonitorForEvents` while recording or transcribing) or via the menu item.
+`idle` → `starting` → `recording` → `finishing` → `idle`. `starting` prevents double-start races while microphone/audio setup is in flight. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit, but quit cleanup still needs a direct `transcriber?.abort()` call and active-recorder stop/delete handling. User can cancel at any state via **Shift+Esc** (global `NSEvent.addGlobalMonitorForEvents` while recording or transcribing; plain Esc is ignored so leaving full screen or closing dialogs in other apps doesn't cancel) or via the menu item (shows ⇧⎋).
 
 ### Cancel during transcription
 `Transcriber` exposes a nonisolated `abort()` method that flips an `Atomic<Bool>` inside a small `Sendable` wrapper. The flag's pointer is passed to whisper via `params.abort_callback_user_data`; the C callback reads the bool. Whisper polls this between graph computations and exits early, so cancellation actually halts inference instead of just discarding the result. `Transcriber.transcribe(...)` throws `TranscriberError.cancelled` when the flag was set, which `RecordingController` catches silently.
@@ -125,12 +127,24 @@ Operates on the 16kHz Float32 samples in 50ms windows. Computes RMS energy per w
 `NSPanel` with `.borderless` + `.nonactivatingPanel` style, `.floating` level, `ignoresMouseEvents`. Positioned at 1/3 from bottom of screen. Recording state shows the level-driven mic icon (see above) plus a "Recording" label. Transcribing state shows a `ProgressView` spinner with "Transcribing…".
 
 ### Settings window lifecycle
-Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` brings the window to front while `LSUIElement` keeps the app out of the Dock.
+Opens via `NSHostingSceneRepresentation.environment.openSettings()`. The representation **must** be registered with `NSApplication.shared.addSceneRepresentation(_:)` in `applicationWillFinishLaunching`, or `openSettings()` silently does nothing. The controller is passed in directly (`SettingsSceneRoot(controller:)`): with `@NSApplicationDelegateAdaptor`, `NSApp.delegate` is SwiftUI's proxy, not our `AppDelegate`. For an LSUIElement app `openSettings()` creates the window but leaves it ordered out, and SwiftUI's Settings window has `canBecomeMain == false`, so `openSettings()` finds it by identifier (`com_apple_SwiftUI_Settings_window`) and calls `makeKeyAndOrderFront` + `orderFrontRegardless`, retrying briefly while the window is created. `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront` brings the window to front while `LSUIElement` keeps the app out of the Dock.
+
+### Live transcription (`liveTranscription`, default on)
+The tap also resamples to 16 kHz mono into a `LiveSampleSink`. `RecordingController+Live` drains it every 500 ms into `LiveChunker`, which cuts at pauses (≥ 10 s chunk + 0.8 s silence), else at the longest short gap near 28 s, else a forced cut with 2 s overlap. Each chunk is queued on `TranscriptionQueue` immediately (`.samples` source); its `initial_prompt` is the dictionary plus the tail of the text assembled so far, and its `TranscriptionSettings` are also evaluated at run time. Language is decided per chunk, so code-switching between chunks works (no session-wide pinning — that translated the other language). `LiveTranscriptAssembler` joins chunk results: paragraph break when the pause ≥ `silenceThreshold`, word-timestamp de-duplication at overlapped seams (`TranscriptionSettings.wordTimestamps`), and lower-casing whisper's spurious sentence start after a non-terminal seam. Segment files are still written and are removed (or moved into the debug folder) when the session ends. With the setting off, the original path runs: concatenate all segments on stop and transcribe once.
+
+### Language handling ("auto" + "Languages I speak")
+"auto" is always passed to whisper **unforced**: the decoder can then keep mixed Polish/English speech in both languages, whereas forcing a language makes it translate the rest. When `autoDetectLanguages` is set and a call's detected language is *outside* that list (typical for short/quiet chunks), `Transcriber` re-runs that call with a forced fallback: `TranscriptionSettings.fallbackLanguage` (in live mode the session's dominant language by accepted characters; otherwise the long-term dominant language from `LanguageUsageStore`, both via `LanguageChooser.dominant`) or, with no history, the most probable listed language (`restrictedDetection` → `whisper_lang_auto_detect` → `LanguageChooser.best`). The re-run only happens on a mismatch, so the normal path costs nothing extra.
+
+### End-of-recording handling
+- **Stop tail:** `stop()` moves to `.finishing` immediately but keeps the engine capturing for `stopTail` (300 ms) before `finishStop()` — audio still in the tap pipeline was otherwise lost and clipped the last word. `stopTailTask` guards `continueSession()` (ignored during the tail) and `cancel()` (stops the recorder and discards).
+- **No-speech filter:** `NoSpeechFilter` drops a segment only when `no_speech_prob > 0.6` **and** its average token log-prob `< -1.0` (OpenAI's rule). Filtering on `no_speech_prob` alone dropped confidently-decoded short final sentences in mostly-silent windows.
+
+### Queue cancellation
+`TranscriptionQueue.cancelAll()` bumps a `generation`; runs from an older generation don't touch the counters in their `defer`. Whisper aborts use an epoch (`Transcriber.abortToken()` captured before audio load, `abort()` bumps it) rather than a Bool reset at run start, so an early Esc isn't lost and a new run can't un-abort an in-flight one.
 
 ### Current architecture gaps to preserve in recommendations
-- `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
-- The app cannot start a second recording while `finishing`; solving that needs a transcription queue.
-- The app cannot change input devices mid-recording; solving that safely needs segmented recordings.
+- File mode (`liveTranscription` off): `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
+- Failed chunks/recordings are not retryable yet; the audio is deleted at session end (see `plan.md`, D5).
 
 ### Tests
 - Test target: `SpokiumTests` (Swift Testing, not XCTest). Run via `RunAllTests` or `⌘U`.
@@ -145,6 +159,10 @@ Opens via `NSHostingSceneRepresentation.environment.openSettings()`. `NSApp.acti
   - `AudioLoader.loadResampled(url:)` — sample-count, RMS preservation, stereo downmix, error path. Audio fixtures are generated at test time via `AVAudioFile` (no checked-in binaries).
 - Test structs are `@MainActor` because the project's default actor isolation is MainActor — non-isolated tests can't initialize MainActor types like `Snippet`. New test types should follow the same pattern.
 - When adding a testable behavior, prefer extracting a pure helper (like `SilenceDetector`) over making tests reach into actor internals. The helper goes next to the production code; the test stays minimal.
+
+## Dev build
+
+The Debug configuration builds `com.spokium.mac.dev` ("Spokium Dev") so it can run next to an installed production build with its own container, defaults, models and permissions. Its default hotkey is ⌃⌥Space (`#if DEBUG` in `HotkeyName`) so it doesn't collide with production's ⌥Space. For the dev build, substitute `com.spokium.mac.dev` in the `defaults` commands and container paths below.
 
 ## Hidden debug mode
 
@@ -192,7 +210,7 @@ This is a developer affordance for diagnosing whisper hallucinations and false-p
 
 ## Settings layer (`Spokium/Settings/AppDefaults.swift`)
 
-All persisted settings flow through `AppDefaults` (typed accessors) and `DefaultsKey` (key string constants). Production code uses `AppDefaults.foo` for reads/writes; SwiftUI views use `@AppStorage(DefaultsKey.foo)` with inline `AppDefaults.fooDefault` constants for the fallback. Direct `UserDefaults.standard` usage is limited to `Snippets` and `ModelPerformanceStore`, which own their own JSON-encoded blobs and reference `DefaultsKey.snippets` / `DefaultsKey.modelPerformance` respectively.
+All persisted settings flow through `AppDefaults` (typed accessors) and `DefaultsKey` (key string constants). Production code uses `AppDefaults.foo` for reads/writes; SwiftUI views use `@AppStorage(DefaultsKey.foo)` with inline `AppDefaults.fooDefault` constants for the fallback. Direct `UserDefaults.standard` usage is limited to `Snippets`, `ModelPerformanceStore` and `LanguageUsageStore`, which own their own JSON-encoded blobs and reference `DefaultsKey.snippets` / `DefaultsKey.modelPerformance` / `DefaultsKey.languageUsage` respectively.
 
 When adding a new setting:
 1. Add the key constant to `DefaultsKey` and the default value constant to `AppDefaults`.
@@ -218,6 +236,9 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `playSounds` | Bool | `false` | GeneralTab, RecordingSounds |
 | `snippets` | Data | `[]` (JSON) | SnippetsTab, SnippetStore (applied in RecordingController) |
 | `maxRecordingMinutes` | Double | `10` | TranscriptionTab, RecordingController auto-stop (0 = no limit) |
+| `liveTranscription` | Bool | `true` | TranscriptionTab, RecordingController+Live |
+| `autoDetectLanguages` | String (comma-separated codes) | `""` (any) | TranscriptionTab ("Languages I speak"), Transcriber fallback |
+| `languageUsage` | Data | `{}` (JSON `[code: characters]`) | LanguageUsageStore (recorded in TranscriptionQueue, shown in TranscriptionTab) |
 
 ## Out of scope (do not build)
 
