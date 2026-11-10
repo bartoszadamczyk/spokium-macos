@@ -15,6 +15,7 @@ extension RecordingController {
         liveDebugSegments = []
         liveAudioOffset = 0
         liveLanguageCharacters = [:]
+        liveLastLanguage = nil
         liveChunker = LiveChunker()
         guard isLiveSession else {
             liveSink = nil
@@ -22,6 +23,7 @@ extension RecordingController {
             recorder.liveSink = nil
             return
         }
+        liveChunker = makeLiveChunker()
         let sink = LiveSampleSink()
         liveSink = sink
         recorder.liveSink = sink
@@ -29,6 +31,25 @@ extension RecordingController {
             paragraphSplitting: AppDefaults.paragraphSplitting,
             paragraphPauseSeconds: AppDefaults.silenceThreshold
         )
+    }
+
+    private func makeLiveChunker() -> LiveChunker {
+        guard AppDefaults.voiceActivityDetection else {
+            logger.info("Live chunking: vad=rms")
+            return LiveChunker()
+        }
+        if sileroClassifier == nil {
+            sileroClassifier = SileroSpeechClassifier()
+        }
+        guard let silero = sileroClassifier else {
+            logger.error("Silero VAD failed to load; live chunking falls back to RMS")
+            return LiveChunker()
+        }
+        silero.reset()
+        logger.info("Live chunking: vad=silero")
+        var config = LiveChunker.Config()
+        config.minSpeechSeconds = 0.25
+        return LiveChunker(config: config, classifier: silero)
     }
 
     func startLivePump() {
@@ -63,6 +84,8 @@ extension RecordingController {
         drainLiveSamples()
         if let last = liveChunker.flush() {
             enqueueLiveChunk(last)
+        } else {
+            logger.notice("Live recording stopped: no speech in the final stretch")
         }
         logger.info("Live recording stopped: queued=\(self.queue.queuedCount)")
         if queue.queuedCount == 0 {
@@ -85,8 +108,11 @@ extension RecordingController {
         liveDebugSegments = []
         liveAudioOffset = 0
         liveLanguageCharacters = [:]
+        liveLastLanguage = nil
         isLiveSession = false
     }
+
+    static let shortChunkSeconds = 3.0
 
     private func enqueueLiveChunk(_ chunk: LiveChunker.Chunk) {
         guard let modelURL = ModelManager().selectedModelURL else {
@@ -101,13 +127,14 @@ extension RecordingController {
             pauseBefore: chunk.pauseBefore
         )
         let wordTimestamps = chunk.leadingOverlap > 0 || chunk.trailingOverlap > 0
+        let isShort = chunk.duration < Self.shortChunkSeconds
 
         // Debug-sidecar timeline only. Approximate: silence the chunker trimmed between
         // chunks isn't counted.
         let offset = liveAudioOffset
         liveAudioOffset += chunk.duration - chunk.trailingOverlap
 
-        logger.info("Live chunk queued: \(String(format: "%.1f", chunk.duration))s, overlap=\(chunk.leadingOverlap)/\(chunk.trailingOverlap), pauseBefore=\(String(format: "%.1f", chunk.pauseBefore))s")
+        logger.notice("Live chunk queued: \(String(format: "%.1f", chunk.duration), privacy: .public)s, overlap=\(chunk.leadingOverlap)/\(chunk.trailingOverlap), pauseBefore=\(String(format: "%.1f", chunk.pauseBefore), privacy: .public)s, short=\(isShort)")
 
         queue.enqueue(
             source: .samples(chunk.samples),
@@ -117,6 +144,11 @@ extension RecordingController {
             settings: { [weak self] in
                 var settings = self?.transcriptionSettings() ?? TranscriptionSettings()
                 settings.wordTimestamps = wordTimestamps
+                // Too little audio for reliable language ID (often misread as Russian):
+                // reuse the previous chunk's language. The first chunk detects freely.
+                if isShort, settings.language == "auto", let last = self?.liveLastLanguage {
+                    settings.language = last
+                }
                 // This recording's dominant language wins; otherwise keep the long-term
                 // one from LanguageUsageStore that transcriptionSettings() filled in.
                 if let self, let sessionDominant = LanguageChooser.dominant(
@@ -134,6 +166,9 @@ extension RecordingController {
                 case .success(let result):
                     self.liveAssembler?.append(text: result.text, words: result.words, info: info)
                     self.liveLanguageCharacters[result.language, default: 0] += result.text.count
+                    if !result.text.isEmpty, result.language != "unknown" {
+                        self.liveLastLanguage = result.language
+                    }
                     self.logger.info("Live chunk done: chars=\(result.text.count), assembled=\(self.liveAssembler?.text.count ?? -1)")
                     if let segments = result.debugSegments {
                         self.liveDebugSegments += segments.map {

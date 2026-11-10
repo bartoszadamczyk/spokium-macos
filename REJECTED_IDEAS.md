@@ -19,3 +19,9 @@ These ideas were explicitly declined during the May 18, 2026 app-review cleanup.
 - Manual model trust state for copied `.bin` files.
 - Paste target safety mode that leaves text on the clipboard if focus changes.
 - Local diagnostics export.
+
+## Reduced whisper encoder window (`audio_ctx`) for short chunks — rejected 2026-11-06
+
+Idea: encode only `chunk length + 1 s` (floor ~7.7 s) instead of whisper's fixed 30 s window, to speed up short live chunks.
+Result with large-v3 on M3 Max: some runs were ~2× faster, but others returned empty or 1–4 characters and set off 6–12 s temperature-fallback retries (high GPU load). With the full window the same chunks took ~0.84 s and were correct. Unreliable → removed. The implementation (`AudioContextSizer`, `params.audio_ctx`) is in git history if it's worth retrying with a larger floor or another model.
+

@@ -95,16 +95,19 @@ struct DiskUsageView: View {
         freeBytes = computeFree()
     }
 
+    // Recursive so Core ML encoders (.mlmodelc directories) are counted too.
     private func computeUsed() -> Int64 {
         let dir = ModelLocator.modelsDirectory
-        guard let files = try? FileManager.default.contentsOfDirectory(
+        guard let enumerator = FileManager.default.enumerator(
             at: dir,
-            includingPropertiesForKeys: [.fileSizeKey]
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]
         ) else { return 0 }
-        return files.reduce(Int64(0)) { sum, url in
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            return sum + Int64(size)
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+            if values?.isRegularFile == true { total += Int64(values?.fileSize ?? 0) }
         }
+        return total
     }
 
     private func computeFree() -> Int64 {
@@ -121,9 +124,15 @@ struct ModelRow: View {
     @Environment(RecordingController.self) private var controller
     @Environment(\.controlActiveState) private var controlActiveState
     @State private var perfRecord: ModelPerformanceStore.Record?
+    @State private var coreMLPerfRecord: ModelPerformanceStore.Record?
 
     private var modelStem: String {
         URL(fileURLWithPath: model.fileName).deletingPathExtension().lastPathComponent
+    }
+
+    private func reloadPerformance() {
+        perfRecord = ModelPerformanceStore.read(modelStem: ModelPerformanceStore.key(modelStem: modelStem, coreML: false))
+        coreMLPerfRecord = ModelPerformanceStore.read(modelStem: ModelPerformanceStore.key(modelStem: modelStem, coreML: true))
     }
 
     var body: some View {
@@ -139,17 +148,25 @@ struct ModelRow: View {
                 Text(model.qualityNote)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // Prefixes only once Neural Engine stats exist; until then there's one line.
                 if let perf = perfRecord {
-                    Text(perf.summary)
+                    Text(coreMLPerfRecord == nil ? perf.summary : "GPU: \(perf.summary)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-            }
-            .onAppear { perfRecord = ModelPerformanceStore.read(modelStem: modelStem) }
-            .onChange(of: controller.state) { _, newState in
-                if newState == .idle {
-                    perfRecord = ModelPerformanceStore.read(modelStem: modelStem)
+                if let perf = coreMLPerfRecord {
+                    Text("Neural Engine: \(perf.summary)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
+                if manager.downloadedNames.contains(model.name) {
+                    CoreMLEncoderRow(model: model, manager: manager)
+                        .padding(.top, 2)
+                }
+            }
+            .onAppear(perform: reloadPerformance)
+            .onChange(of: controller.state) { _, newState in
+                if newState == .idle { reloadPerformance() }
             }
 
             Spacer()
@@ -199,3 +216,57 @@ struct ModelRow: View {
         .padding(.vertical, 4)
     }
 }
+
+// Optional Neural Engine encoder for a downloaded model. Helps most on Macs whose GPU is
+// modest relative to the Neural Engine (e.g. M1/M2 Pro and base chips).
+struct CoreMLEncoderRow: View {
+    let model: WhisperModel
+    @Bindable var manager: ModelManager
+    @Environment(RecordingController.self) private var controller
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cpu")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Neural Engine encoder")
+                .font(.caption)
+            Text(model.coreMLSizeLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let progress = manager.coreMLProgress(model) {
+                ProgressView(value: progress)
+                    .controlSize(.small)
+                    .frame(width: 70)
+                Button {
+                    manager.cancelCoreMLDownload(model)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            } else if manager.coreMLInstalledNames.contains(model.name) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                Button {
+                    manager.deleteCoreML(model)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(manager.selectedModelName == model.name && controller.state != .idle)
+            } else {
+                Button("Download") {
+                    manager.downloadCoreML(model)
+                }
+                .controlSize(.small)
+            }
+        }
+        .help("Runs whisper's encoder on the Apple Neural Engine via Core ML. Usually faster on M1/M2-class GPUs and lighter on battery. The first use after installing compiles it for your Mac, which can take a few minutes once.")
+    }
+}
+

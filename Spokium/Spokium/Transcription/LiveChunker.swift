@@ -11,13 +11,12 @@ import Foundation
 //   3. Forced cut at maxChunkSeconds, carrying overlapSeconds of audio into the next
 //      chunk so LiveTranscriptAssembler can de-duplicate words at the seam.
 //
-// All cut positions are aligned to analysis windows so the per-window RMS array can
-// be sliced alongside the samples.
+// "Silence" is decided per analysis window by a SpeechClassifier: Silero VAD when its
+// model loads, RMS energy otherwise. All cut positions are aligned to those windows so
+// the per-window flags can be sliced alongside the samples.
 nonisolated struct LiveChunker {
     struct Config {
         var sampleRate: Double = 16_000
-        var windowSeconds: Double = 0.05
-        var silenceRMS: Float = 0.01
         var minChunkSeconds: Double = 10
         var maxChunkSeconds: Double = 28
         var pauseToCutSeconds: Double = 0.8
@@ -27,6 +26,9 @@ nonisolated struct LiveChunker {
         // Leading silence beyond this is dropped (and counted toward pauseBefore) so
         // chunks don't start with long stretches whisper likes to hallucinate over.
         var maxLeadingSilenceSeconds: Double = 0.5
+        // A chunk needs this much speech in total to be emitted. Keeps lone VAD blips
+        // (a cough, a click) from becoming whisper calls that hallucinate.
+        var minSpeechSeconds: Double = 0
     }
 
     struct Chunk: Equatable {
@@ -44,44 +46,66 @@ nonisolated struct LiveChunker {
 
     let config: Config
 
+    private var classifier: any SpeechClassifier
     private var samples: [Float] = []
-    private var windowRMS: [Float] = []
+    private var windowSpeech: [Bool] = []
+    // RMS ≥ audibleRMS per window, regardless of classifier. Keep/drop decisions use speech OR
+    // loud: Silero scores real whispering (breath, room noise) as non-speech, and it must
+    // never throw away audio the old RMS check would have kept. Cut placement still
+    // follows windowSpeech alone, so noise doesn't block pause cuts.
+    private var windowLoud: [Bool] = []
     private var leadingOverlap: Double = 0
     private var pauseCarriedIn: Double = 0
     private var trimmedSilence: Double = 0
     private var isFirstChunk = true
 
-    init(config: Config = Config()) {
+    init(config: Config = Config(), classifier: any SpeechClassifier = RMSSpeechClassifier()) {
         self.config = config
+        self.classifier = classifier
     }
 
-    private var windowSize: Int { max(1, Int(config.sampleRate * config.windowSeconds)) }
-    private var hasSpeech: Bool { windowRMS.contains { $0 >= config.silenceRMS } }
+    private var windowSize: Int { max(1, classifier.windowSamples) }
+    private var windowSeconds: Double { Double(windowSize) / config.sampleRate }
+
+    // Worth transcribing: enough classified speech, or anything audible.
+    private var hasContent: Bool {
+        hasSpeech || windowLoud.contains(true)
+    }
+
+    private var hasSpeech: Bool {
+        let needed = max(1, Int((config.minSpeechSeconds / windowSeconds).rounded()))
+        var count = 0
+        for speech in windowSpeech where speech {
+            count += 1
+            if count >= needed { return true }
+        }
+        return false
+    }
 
     private var trailingSilentWindows: Int {
-        var n = 0
-        for rms in windowRMS.reversed() {
-            guard rms < config.silenceRMS else { break }
-            n += 1
-        }
-        return n
+        windowSpeech.reversed().prefix { !$0 }.count
     }
 
     private var leadingSilentWindows: Int {
-        windowRMS.prefix { $0 < config.silenceRMS }.count
+        windowSpeech.prefix { !$0 }.count
     }
 
     mutating func append(_ newSamples: [Float]) -> [Chunk] {
         var out: [Chunk] = []
         samples.append(contentsOf: newSamples)
         let size = windowSize
+        let classifiedEnd = windowSpeech.count * size
+        let completeEnd = samples.count / size * size
+        guard completeEnd > classifiedEnd else { return out }
 
-        while windowRMS.count * size + size <= samples.count {
-            let start = windowRMS.count * size
-            var sum: Float = 0
-            for i in start..<(start + size) { sum += samples[i] * samples[i] }
-            windowRMS.append((sum / Float(size)).squareRoot())
-
+        // Classified as one batch (cheaper for the VAD), then fed in window by window
+        // so cuts land exactly where they would with per-window processing.
+        let slice = samples[classifiedEnd..<completeEnd]
+        let flags = classifier.classify(slice)
+        let loud = RMSSpeechClassifier(windowSamples: size, silenceRMS: RMSSpeechClassifier.audibleRMS).classify(slice)
+        for (speech, isLoud) in zip(flags, loud) {
+            windowSpeech.append(speech)
+            windowLoud.append(isLoud)
             trimLeadingSilence()
             if let chunk = cutIfReady() { out.append(chunk) }
         }
@@ -91,13 +115,15 @@ nonisolated struct LiveChunker {
     // Emits whatever is left once recording stops. Returns nil if it holds no speech.
     mutating func flush() -> Chunk? {
         defer { reset() }
-        guard hasSpeech else { return nil }
-        return makeChunk(endWindow: windowRMS.count, sampleEnd: samples.count, trailingOverlap: 0)
+        guard hasContent else { return nil }
+        return makeChunk(endWindow: windowSpeech.count, sampleEnd: samples.count, trailingOverlap: 0)
     }
 
     private mutating func reset() {
+        classifier.reset()
         samples = []
-        windowRMS = []
+        windowSpeech = []
+        windowLoud = []
         leadingOverlap = 0
         pauseCarriedIn = 0
         trimmedSilence = 0
@@ -105,32 +131,35 @@ nonisolated struct LiveChunker {
     }
 
     private mutating func trimLeadingSilence() {
-        guard leadingOverlap == 0, !hasSpeech else { return }
-        let keep = Int((config.maxLeadingSilenceSeconds / config.windowSeconds).rounded())
-        let excess = windowRMS.count - keep
+        guard leadingOverlap == 0, !hasContent else { return }
+        // Also keep the speech seen so far: while it's still under minSpeechSeconds the
+        // chunk doesn't count as speech yet, but its onset must survive the trim.
+        let keepSeconds = config.maxLeadingSilenceSeconds + config.minSpeechSeconds * 2
+        let keep = Int((keepSeconds / windowSeconds).rounded())
+        let excess = windowSpeech.count - keep
         guard excess > 0 else { return }
         dropWindows(excess)
-        trimmedSilence += Double(excess) * config.windowSeconds
+        trimmedSilence += Double(excess) * windowSeconds
     }
 
     private mutating func cutIfReady() -> Chunk? {
-        guard hasSpeech else { return nil }
-        let duration = Double(windowRMS.count) * config.windowSeconds
+        guard hasContent else { return nil }
+        let duration = Double(windowSpeech.count) * windowSeconds
         let silentTail = trailingSilentWindows
-        let pauseWindows = Int((config.pauseToCutSeconds / config.windowSeconds).rounded())
+        let pauseWindows = Int((config.pauseToCutSeconds / windowSeconds).rounded())
 
         if duration >= config.minChunkSeconds, silentTail >= pauseWindows {
-            return cut(atWindow: windowRMS.count - silentTail / 2, carriedPause: Double(silentTail) * config.windowSeconds / 2)
+            return cut(atWindow: windowSpeech.count - silentTail / 2, carriedPause: Double(silentTail) * windowSeconds / 2)
         }
 
         guard duration >= config.maxChunkSeconds else { return nil }
 
         if let gap = longestGapInSearchRange() {
-            return cut(atWindow: gap.mid, carriedPause: Double(gap.length) * config.windowSeconds / 2)
+            return cut(atWindow: gap.mid, carriedPause: Double(gap.length) * windowSeconds / 2)
         }
 
-        let overlapWindows = Int((config.overlapSeconds / config.windowSeconds).rounded())
-        let end = windowRMS.count
+        let overlapWindows = Int((config.overlapSeconds / windowSeconds).rounded())
+        let end = windowSpeech.count
         let chunk = makeChunk(endWindow: end, sampleEnd: end * windowSize, trailingOverlap: config.overlapSeconds)
         dropWindows(end - overlapWindows)
         leadingOverlap = config.overlapSeconds
@@ -140,13 +169,13 @@ nonisolated struct LiveChunker {
     }
 
     private func longestGapInSearchRange() -> (mid: Int, length: Int)? {
-        let searchWindows = Int((config.searchSeconds / config.windowSeconds).rounded())
-        let minGap = max(1, Int((config.minGapSeconds / config.windowSeconds).rounded()))
-        let from = max(0, windowRMS.count - searchWindows)
+        let searchWindows = Int((config.searchSeconds / windowSeconds).rounded())
+        let minGap = max(1, Int((config.minGapSeconds / windowSeconds).rounded()))
+        let from = max(0, windowSpeech.count - searchWindows)
         var best: (mid: Int, length: Int)?
         var runStart: Int?
-        for i in from...windowRMS.count {
-            let silent = i < windowRMS.count && windowRMS[i] < config.silenceRMS
+        for i in from...windowSpeech.count {
+            let silent = i < windowSpeech.count && !windowSpeech[i]
             if silent {
                 if runStart == nil { runStart = i }
             } else if let start = runStart {
@@ -174,7 +203,7 @@ nonisolated struct LiveChunker {
         if isFirstChunk || leadingOverlap > 0 {
             pause = 0
         } else {
-            pause = pauseCarriedIn + trimmedSilence + Double(leadingSilentWindows) * config.windowSeconds
+            pause = pauseCarriedIn + trimmedSilence + Double(leadingSilentWindows) * windowSeconds
         }
         isFirstChunk = false
         return Chunk(
@@ -187,7 +216,35 @@ nonisolated struct LiveChunker {
 
     private mutating func dropWindows(_ count: Int) {
         guard count > 0 else { return }
-        windowRMS.removeFirst(min(count, windowRMS.count))
+        windowSpeech.removeFirst(min(count, windowSpeech.count))
+        windowLoud.removeFirst(min(count, windowLoud.count))
         samples.removeFirst(min(count * windowSize, samples.count))
     }
+}
+
+// Decides, per fixed-size window of 16 kHz samples, whether it holds speech.
+nonisolated protocol SpeechClassifier {
+    var windowSamples: Int { get }
+    // samples.count is a multiple of windowSamples; returns one flag per window.
+    mutating func classify(_ samples: ArraySlice<Float>) -> [Bool]
+    // Called between recordings so state from one doesn't leak into the next.
+    mutating func reset()
+}
+
+nonisolated struct RMSSpeechClassifier: SpeechClassifier {
+    var windowSamples = 800
+    var silenceRMS: Float = 0.01
+    // Lower bar for "don't throw this away": close-mic whispering sits around 0.005–0.02,
+    // a quiet room below ~0.003.
+    static let audibleRMS: Float = 0.005
+
+    func classify(_ samples: ArraySlice<Float>) -> [Bool] {
+        stride(from: samples.startIndex, to: samples.endIndex, by: windowSamples).map { start in
+            let window = samples[start..<min(start + windowSamples, samples.endIndex)]
+            let sum = window.reduce(Float(0)) { $0 + $1 * $1 }
+            return (sum / Float(window.count)).squareRoot() >= silenceRMS
+        }
+    }
+
+    func reset() {}
 }

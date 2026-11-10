@@ -84,6 +84,11 @@ extension AppDelegate {
         modelItem.submenu = modelMenu
         menu.addItem(modelItem)
 
+        quietMenu = NSMenu()
+        quietItem = NSMenuItem(title: "Quiet While Recording", action: nil, keyEquivalent: "")
+        quietItem.submenu = quietMenu
+        menu.addItem(quietItem)
+
         recentTranscriptsMenu = NSMenu()
         recentTranscriptsItem = NSMenuItem(title: "Recent Transcripts", action: nil, keyEquivalent: "")
         recentTranscriptsItem.submenu = recentTranscriptsMenu
@@ -133,6 +138,7 @@ extension AppDelegate {
         refreshErrorMenu()
         refreshInputDeviceMenu()
         refreshModelMenu()
+        refreshQuietMenu()
         refreshRecentTranscriptsMenu()
         revealDebugFolderItem.isHidden = !AppDefaults.debugMode
         refreshQueueStatus()

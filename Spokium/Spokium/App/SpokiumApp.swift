@@ -6,8 +6,7 @@ struct SpokiumApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView()
-                .environment(appDelegate.controller)
+            SettingsSceneRoot(controller: appDelegate.controller)
         }
     }
 }

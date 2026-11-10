@@ -13,7 +13,7 @@ struct TranscriptionSettings: Sendable {
     // Preferred fallback for the above, e.g. the dominant language of the session so far.
     var fallbackLanguage: String?
     var paragraphSplitting: Bool = true
-    var minSilenceDuration: Double = 3.0
+    var minSilenceDuration: Double = AppDefaults.silenceThresholdDefault
     // Per-token timing, needed by LiveTranscriptAssembler to de-duplicate overlapped
     // chunk seams. Off by default since it costs a little extra decode time.
     var wordTimestamps: Bool = false
@@ -76,9 +76,20 @@ actor Transcriber {
     let modelURL: URL
     private var context: WhisperContext?
     nonisolated private let abortFlag = AbortFlag()
+    private var vad: SileroSpeechClassifier?
+    private var vadUnavailable = false
+
+    // whisper.cpp only looks for the Core ML encoder when the context is created, so a
+    // transcriber built before the encoder was installed (or removed) is stale.
+    nonisolated let usesCoreMLEncoder: Bool
+
+    nonisolated var isStale: Bool {
+        FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path) != usesCoreMLEncoder
+    }
 
     init(modelURL: URL) {
         self.modelURL = modelURL
+        self.usesCoreMLEncoder = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
     }
 
     nonisolated func abort() {
@@ -107,6 +118,16 @@ actor Transcriber {
     ) throws -> TranscriptionResult {
         abortFlag.armed.store(abortToken ?? self.abortToken(), ordering: .relaxed)
         if abortFlag.isAborted { throw TranscriberError.cancelled }
+
+        let speech = speechFlags(for: samples)
+        // True silence only: no classified speech *and* nothing audible. Silero alone
+        // isn't trusted to drop audio — it scores real whispering as non-speech.
+        if let speech, Double(speech.filter { $0 }.count) * Self.vadWindowSeconds < Self.minSpeechSeconds,
+           !Self.isAudible(samples) {
+            transcriberLogger.notice("No speech per VAD in \(String(format: "%.1f", Double(samples.count) / 16_000), privacy: .public)s — skipping whisper")
+            return TranscriptionResult(text: "", language: "unknown", debugSegments: nil)
+        }
+
         let ctx = try loadedContext()
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
@@ -188,7 +209,9 @@ actor Transcriber {
         if loopFallbackTriggered {
             text = ""
         } else if settings.paragraphSplitting {
-            let silenceBreaks = SilenceDetector.breaks(
+            let silenceBreaks = speech.map {
+                SilenceDetector.breaks(speech: $0, windowSeconds: Self.vadWindowSeconds, minSilenceDuration: settings.minSilenceDuration)
+            } ?? SilenceDetector.breaks(
                 samples: samples,
                 sampleRate: 16000,
                 minSilenceDuration: settings.minSilenceDuration
@@ -286,6 +309,13 @@ actor Transcriber {
         return Int(whisper_token_count(ctx, text))
     }
 
+    // Loads the model ahead of the first transcription (e.g. while the user is still
+    // speaking). The actor serialises this with transcribe(), so a chunk that arrives
+    // mid-load simply waits for it instead of loading a second copy.
+    func warmUp() {
+        _ = try? loadedContext()
+    }
+
     func unload() {
         context = nil
     }
@@ -318,10 +348,14 @@ actor Transcriber {
     private func keptSegmentIndices(ctx: OpaquePointer) -> [Int32] {
         let n = whisper_full_n_segments(ctx)
         return (0..<n).filter { i in
-            !NoSpeechFilter.shouldDrop(
-                noSpeechProb: whisper_full_get_segment_no_speech_prob(ctx, i),
-                averageLogProb: averageLogProb(ctx: ctx, segment: i)
-            )
+            let noSpeech = whisper_full_get_segment_no_speech_prob(ctx, i)
+            let logProb = averageLogProb(ctx: ctx, segment: i)
+            let drop = NoSpeechFilter.shouldDrop(noSpeechProb: noSpeech, averageLogProb: logProb)
+            if drop {
+                // Metadata only. Kept at notice level so a dropped quiet phrase is traceable.
+                transcriberLogger.notice("No-speech filter dropped segment \(i): no_speech=\(String(format: "%.2f", noSpeech), privacy: .public) avg_logprob=\(String(format: "%.2f", logProb ?? .nan), privacy: .public)")
+            }
+            return !drop
         }
     }
 
@@ -379,13 +413,44 @@ actor Transcriber {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static func isAudible(_ samples: [Float]) -> Bool {
+        let usable = samples.count / 512 * 512
+        return RMSSpeechClassifier(windowSamples: 512, silenceRMS: RMSSpeechClassifier.audibleRMS).classify(samples[0..<usable]).contains(true)
+    }
+
+    private static let vadWindowSeconds = 512.0 / 16_000
+    private static let minSpeechSeconds = 0.25
+
+    // Per-window Silero flags, or nil when VAD is switched off or failed to load
+    // (callers then fall back to RMS).
+    private func speechFlags(for samples: [Float]) -> [Bool]? {
+        guard AppDefaults.voiceActivityDetection, !vadUnavailable else { return nil }
+        if vad == nil {
+            vad = SileroSpeechClassifier()
+            vadUnavailable = vad == nil
+        }
+        guard let vad else { return nil }
+        vad.reset()
+        let usable = samples.count / vad.windowSamples * vad.windowSamples
+        return vad.classify(samples[0..<usable])
+    }
+
     private static let suppressLogs: Void = {
         whisper_log_set({ _, _, _ in }, nil)
     }()
 
+    // The VAD logs through the same callback, several lines per call.
+    nonisolated static func suppressWhisperLogs() {
+        _ = suppressLogs
+    }
+
     private func loadedContext() throws -> OpaquePointer {
         if let context { return context.pointer }
         _ = Self.suppressLogs
+        let loadStart = ContinuousClock.now
+        defer {
+            transcriberLogger.notice("Model loaded: \(self.modelURL.deletingPathExtension().lastPathComponent, privacy: .public) in \(ContinuousClock.now - loadStart, privacy: .public), coreML=\(self.usesCoreMLEncoder)")
+        }
 
         var params = whisper_context_default_params()
         params.use_gpu = true

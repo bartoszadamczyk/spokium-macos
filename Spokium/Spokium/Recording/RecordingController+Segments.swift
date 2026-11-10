@@ -119,6 +119,22 @@ extension RecordingController {
         returnFromRecording()
     }
 
+    // A device went away: re-point the selection (see AudioInputDevice.replacementSelection).
+    // Mid-recording, switchInputDevice moves the recording over too.
+    func inputDevicesChanged(removed: [AudioInputDevice]) {
+        guard !removed.isEmpty else { return }
+        let selected = AppDefaults.selectedInputDevice
+        guard let replacement = AudioInputDevice.replacementSelection(
+            selectedUID: selected,
+            devices: AudioInputDevice.available(),
+            systemDefaultUID: AudioInputDevice.defaultInputUID(),
+            builtInUsable: !AudioInputDevice.isLidClosed
+        ), replacement != selected else { return }
+        let name = AudioInputDevice.available().first { $0.uid == replacement }?.name ?? "System Default"
+        logger.info("Input device removed — selection switched to \(name, privacy: .public)")
+        switchInputDevice(uid: replacement)
+    }
+
     // Switches input device while recording without losing audio.
     func switchInputDevice(uid: String) {
         let previousUID = AppDefaults.selectedInputDevice

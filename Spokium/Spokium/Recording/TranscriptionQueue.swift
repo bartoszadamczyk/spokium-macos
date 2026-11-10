@@ -129,10 +129,11 @@ final class TranscriptionQueue {
 
         guard !Task.isCancelled else { return }
 
-        if transcriber?.modelURL != modelURL { transcriber = nil }
+        if transcriber?.modelURL != modelURL || transcriber?.isStale == true { transcriber = nil }
         let transcriber = self.transcriber ?? Transcriber(modelURL: modelURL)
         self.transcriber = transcriber
         let abortToken = transcriber.abortToken()
+        let runSettings = settings()
 
         currentStartedAt = .now
 
@@ -170,7 +171,7 @@ final class TranscriptionQueue {
             let result = try await transcriber.transcribe(
                 samples: allSamples,
                 initialPrompt: initialPrompt(),
-                settings: settings(),
+                settings: runSettings,
                 abortToken: abortToken
             )
 
@@ -179,13 +180,13 @@ final class TranscriptionQueue {
             capturedDebugSegments = result.debugSegments
             let transcriptionDuration = ContinuousClock.now - transcribeStart
             let modelStem = modelURL.deletingPathExtension().lastPathComponent
-            logger.info("Transcribed: model=\(modelStem, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), source=\(urls.isEmpty ? "live-chunk" : "\(urls.count) file(s)", privacy: .public), audio=\(String(format: "%.1f", totalAudioSeconds))s, recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public)")
+            logger.info("Transcribed: model=\(modelStem, privacy: .public), language=\(result.language, privacy: .public), chars=\(result.text.count), source=\(urls.isEmpty ? "live-chunk" : "\(urls.count) file(s)", privacy: .public), audio=\(String(format: "%.1f", totalAudioSeconds), privacy: .public)s, recording=\(recordingDuration, privacy: .public), transcription=\(transcriptionDuration, privacy: .public), encoder=\(transcriber.usesCoreMLEncoder ? "ane" : "gpu", privacy: .public)")
 
             let (tsec, tatto) = transcriptionDuration.components
             let transcribeSeconds = Double(tsec) + Double(tatto) * 1e-18
             LanguageUsageStore.record(language: result.language, characters: result.text.count)
             ModelPerformanceStore.record(
-                modelStem: modelStem,
+                modelStem: ModelPerformanceStore.key(modelStem: modelStem, coreML: transcriber.usesCoreMLEncoder),
                 audioSeconds: totalAudioSeconds,
                 transcribeSeconds: transcribeSeconds
             )
@@ -238,6 +239,17 @@ final class TranscriptionQueue {
         let fresh = Transcriber(modelURL: modelURL)
         if pendingCount == 0 { self.transcriber = fresh }
         return try? await fresh.tokenCount(for: text)
+    }
+
+    // Starts loading the model in the background. Skipped if a different model's
+    // transcriber is mid-run — swapping it out would break abort()/unload() for that run.
+    func warmUp(modelURL: URL) {
+        if transcriber?.modelURL != modelURL || transcriber?.isStale == true {
+            guard pendingCount == 0 else { return }
+            transcriber = Transcriber(modelURL: modelURL)
+        }
+        guard let transcriber else { return }
+        Task { await transcriber.warmUp() }
     }
 
     func unload() async {

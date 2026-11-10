@@ -8,7 +8,12 @@ struct SettingsSceneRoot: View {
         SettingsView()
             .environment(controller)
             .modifier(DevBuildBanner())
+            // Outermost on purpose: the dev banner stretches to any width, so a frame
+            // inside it was overridden and the dev window opened ~900 pt wide.
+            .frame(width: Self.size.width, height: Self.size.height)
     }
+
+    static let size = CGSize(width: 600, height: 500)
 }
 
 // Marks the dev build's settings so they aren't mistaken for production's — the two
@@ -37,6 +42,8 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             TranscriptionTab()
                 .tabItem { Label("Transcription", systemImage: "waveform") }
+            OutputTab()
+                .tabItem { Label("Output", systemImage: "doc.on.clipboard") }
             ModelTab()
                 .tabItem { Label("Model", systemImage: "cpu") }
             DictionaryTab()
@@ -44,6 +51,5 @@ struct SettingsView: View {
             SnippetsTab()
                 .tabItem { Label("Snippets", systemImage: "text.append") }
         }
-        .frame(width: 600, height: 400)
     }
 }

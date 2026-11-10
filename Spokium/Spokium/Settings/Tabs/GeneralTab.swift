@@ -8,7 +8,9 @@ struct GeneralTab: View {
     @AppStorage(DefaultsKey.selectedInputDevice) private var selectedInputDevice = AppDefaults.selectedInputDeviceDefault
     @AppStorage(DefaultsKey.pushToRecord) private var pushToRecord = AppDefaults.pushToRecordDefault
     @AppStorage(DefaultsKey.playSounds) private var playSounds = AppDefaults.playSoundsDefault
-    @AppStorage(DefaultsKey.keepRecentTranscripts) private var keepRecentTranscripts = AppDefaults.keepRecentTranscriptsDefault
+    @AppStorage(DefaultsKey.maxRecordingMinutes) private var maxRecordingMinutes = AppDefaults.maxRecordingMinutesDefault
+    @AppStorage(DefaultsKey.selectedQuietEndpoint) private var selectedQuietEndpoint = AppDefaults.selectedQuietEndpointDefault
+    @State private var quietEndpoints: [QuietEndpoint] = QuietEndpointStore.load()
     @State private var devices: [AudioInputDevice] = []
     @State private var defaultInputName: String = ""
 
@@ -45,11 +47,66 @@ struct GeneralTab: View {
                     // Trigger seamless device handoff when changed mid-recording
                     controller.switchInputDevice(uid: newUID)
                 }
+                Picker("Auto-stop after:", selection: $maxRecordingMinutes) {
+                    Text("10 minutes").tag(10.0)
+                    Text("20 minutes").tag(20.0)
+                    Text("30 minutes").tag(30.0)
+                    Text("1 hour").tag(60.0)
+                    Divider()
+                    Text("No limit").tag(0.0)
+                }
+                .onAppear {
+                    // A value saved by an older version (1/2/5 min) would leave the picker blank.
+                    let normalized = AppDefaults.normalizedMaxRecordingMinutes(maxRecordingMinutes)
+                    if normalized != maxRecordingMinutes { maxRecordingMinutes = normalized }
+                }
                 Toggle("Play sound effects", isOn: $playSounds)
-                Toggle("Keep recent transcripts (5 min, memory only)", isOn: $keepRecentTranscripts)
-                    .onChange(of: keepRecentTranscripts) { _, newValue in
-                        if !newValue { controller.history.clear() }
+            }
+            Section {
+                if !quietEndpoints.isEmpty {
+                    Picker("Quiet:", selection: $selectedQuietEndpoint) {
+                        Text("None").tag("")
+                        Divider()
+                        ForEach(quietEndpoints) { endpoint in
+                            Text(endpoint.name.isEmpty ? endpoint.url : endpoint.name).tag(endpoint.id.uuidString)
+                        }
                     }
+                }
+                ForEach($quietEndpoints) { $endpoint in
+                    HStack(spacing: 8) {
+                        TextField("Name", text: $endpoint.name)
+                            .labelsHidden()
+                            .frame(width: 110)
+                        TextField("URL", text: $endpoint.url, prompt: Text("http://radio.local/quiet"))
+                            .labelsHidden()
+                            .foregroundStyle(endpoint.url.isEmpty || endpoint.validURL != nil ? .primary : Color.red)
+                        Button {
+                            quietEndpoints.removeAll { $0.id == endpoint.id }
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button("Add Device") {
+                    quietEndpoints.append(QuietEndpoint())
+                }
+            } header: {
+                Text("Quiet while recording")
+            } footer: {
+                Text("Spokium sends POST when recording starts, repeats it every 20 s, and DELETE when you stop. Nothing about the recording is sent.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: selectedQuietEndpoint) { _, _ in
+            controller.quietEndpointChanged()
+        }
+        .onChange(of: quietEndpoints) { _, newValue in
+            QuietEndpointStore.save(newValue)
+            if !newValue.contains(where: { $0.id.uuidString == selectedQuietEndpoint }) {
+                selectedQuietEndpoint = ""
             }
         }
         .formStyle(.grouped)

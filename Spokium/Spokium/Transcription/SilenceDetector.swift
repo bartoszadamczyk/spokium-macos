@@ -13,31 +13,30 @@ enum SilenceDetector {
     ) -> [Double] {
         let windowSize = sampleRate / 20 // 50ms windows
         guard windowSize > 0 else { return [] }
-        let minSilenceWindows = Int(minSilenceDuration * 20)
+        let usable = samples.count / windowSize * windowSize
+        let speech = RMSSpeechClassifier(windowSamples: windowSize, silenceRMS: rmsThreshold)
+            .classify(samples[0..<usable])
+        let windowSeconds = Double(windowSize) / Double(sampleRate)
+        return breaks(speech: speech, windowSeconds: windowSeconds, minSilenceDuration: minSilenceDuration)
+    }
+
+    // Same rule over per-window speech flags (e.g. from Silero VAD).
+    nonisolated static func breaks(speech: [Bool], windowSeconds: Double, minSilenceDuration: Double) -> [Double] {
+        guard windowSeconds > 0 else { return [] }
+        // Epsilon: 3.0 / 0.05 is 59.999… in floating point.
+        let minSilenceWindows = Int(minSilenceDuration / windowSeconds + 1e-9)
         var breaks: [Double] = []
         var silenceStart: Int?
 
-        for windowIndex in 0..<(samples.count / windowSize) {
-            let offset = windowIndex * windowSize
-            let end = min(offset + windowSize, samples.count)
-            var sumSq: Float = 0
-            for i in offset..<end {
-                sumSq += samples[i] * samples[i]
-            }
-            let rms = (sumSq / Float(end - offset)).squareRoot()
-
-            if rms < rmsThreshold {
-                if silenceStart == nil { silenceStart = windowIndex }
-            } else {
-                if let start = silenceStart {
-                    let duration = windowIndex - start
-                    if duration >= minSilenceWindows {
-                        let midWindow = start + duration / 2
-                        let timeSeconds = Double(midWindow * windowSize) / Double(sampleRate)
-                        breaks.append(timeSeconds)
-                    }
-                    silenceStart = nil
+        for (index, isSpeech) in speech.enumerated() {
+            if !isSpeech {
+                if silenceStart == nil { silenceStart = index }
+            } else if let start = silenceStart {
+                let duration = index - start
+                if duration >= minSilenceWindows {
+                    breaks.append(Double(start + duration / 2) * windowSeconds)
                 }
+                silenceStart = nil
             }
         }
         return breaks

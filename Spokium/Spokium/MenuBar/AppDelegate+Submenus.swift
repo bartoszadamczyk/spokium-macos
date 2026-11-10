@@ -43,7 +43,6 @@ extension AppDelegate {
             let empty = NSMenuItem(title: "No models downloaded", action: nil, keyEquivalent: "")
             empty.isEnabled = false
             modelMenu.addItem(empty)
-            modelMenu.addItem(.separator())
         } else {
             for model in downloaded {
                 let item = NSMenuItem(
@@ -56,12 +55,7 @@ extension AppDelegate {
                 item.state = manager.selectedModelName == model.name ? .on : .off
                 modelMenu.addItem(item)
             }
-            modelMenu.addItem(.separator())
         }
-
-        let manage = NSMenuItem(title: "Manage Models…", action: #selector(openSettings), keyEquivalent: "")
-        manage.target = self
-        modelMenu.addItem(manage)
     }
 
     @objc func selectModel(_ sender: NSMenuItem) {
@@ -122,5 +116,36 @@ extension AppDelegate {
 
     @objc func revealDebugFolder() {
         DebugRecordingStore.revealInFinder()
+    }
+
+    // Hidden until a device is added in Settings → General.
+    func refreshQuietMenu() {
+        quietMenu.removeAllItems()
+        let endpoints = QuietEndpointStore.load()
+        quietItem.isHidden = endpoints.isEmpty
+        let selected = AppDefaults.selectedQuietEndpoint
+
+        let none = NSMenuItem(title: "None", action: #selector(selectQuietEndpoint(_:)), keyEquivalent: "")
+        none.target = self
+        none.representedObject = ""
+        none.state = selected.isEmpty ? .on : .off
+        quietMenu.addItem(none)
+        quietMenu.addItem(.separator())
+        for endpoint in endpoints {
+            let item = NSMenuItem(
+                title: endpoint.name.isEmpty ? endpoint.url : endpoint.name,
+                action: #selector(selectQuietEndpoint(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = endpoint.id.uuidString
+            item.state = endpoint.id.uuidString == selected ? .on : .off
+            quietMenu.addItem(item)
+        }
+    }
+
+    @objc func selectQuietEndpoint(_ sender: NSMenuItem) {
+        AppDefaults.selectedQuietEndpoint = sender.representedObject as? String ?? ""
+        controller.quietEndpointChanged()
     }
 }

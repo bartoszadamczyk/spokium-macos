@@ -177,6 +177,7 @@ final class AudioRecorder {
     // Set for live-transcription sessions; applies from the next start().
     var liveSink: LiveSampleSink?
 
+
     var isRunning: Bool { session != nil }
     var currentLevel: Float { levelMeter.level }
 
@@ -189,15 +190,19 @@ final class AudioRecorder {
         guard granted else { throw AudioRecorderError.microphoneDenied }
 
         let uid = AppDefaults.selectedInputDevice
-        var deviceID: AudioDeviceID?
+        var device: AudioInputDevice?
         if !uid.isEmpty {
-            deviceID = AudioInputDevice.available().first(where: { $0.uid == uid })?.deviceID
-            if deviceID == nil {
-                logger.error("Selected input device \(uid, privacy: .public) not available — falling back to system default")
+            device = AudioInputDevice.available().first(where: { $0.uid == uid })
+            if device == nil {
+                // Normally already re-pointed when the device went away; this covers a
+                // device that was gone before launch. Saved, so the menu shows it.
+                device = AudioInputDevice.nextBest()
+                AppDefaults.selectedInputDevice = device?.uid ?? ""
+                logger.error("Input device \(uid, privacy: .public) not available — switched selection to \(device?.name ?? "System Default", privacy: .public)")
             }
         }
 
-        let selectedDeviceID = deviceID
+        let selectedDeviceID = device?.deviceID
         let flag = writeErrorFlag
         let meter = levelMeter
         let sink = liveSink

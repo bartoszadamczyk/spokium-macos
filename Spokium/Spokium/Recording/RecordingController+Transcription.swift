@@ -14,11 +14,13 @@ extension RecordingController {
         pendingAudioSegments = []
 
         let manager = ModelManager()
-        guard manager.selectedModelURL != nil else {
+        guard let modelURL = manager.selectedModelURL else {
             state = .idle
             reportError(.noModel)
             return
         }
+        // Load while the user speaks rather than when the first chunk arrives.
+        queue.warmUp(modelURL: modelURL)
 
         beginLiveSessionIfEnabled()
         await startSegment(playSound: true)
@@ -81,6 +83,7 @@ extension RecordingController {
 
         state = .finishing
         stopSegmentMonitors()
+        stopRequestedAt = .now
 
         stopTailTask = Task { [weak self] in
             try? await Task.sleep(for: Self.stopTail)
@@ -165,6 +168,7 @@ extension RecordingController {
 
     func finishSession() {
         monitors.stopEscape()
+        let wasLive = isLiveSession
 
         let combined: String
         if isLiveSession {
@@ -178,6 +182,8 @@ extension RecordingController {
 
         let finalText = SnippetStore.apply(to: combined)
         logger.info("Session finished: chars=\(finalText.count)")
+        let stoppedAt = stopRequestedAt
+        stopRequestedAt = nil
         guard !finalText.isEmpty else {
             lastCompletion = .empty
             RecordingSounds.playEmpty()
@@ -192,7 +198,8 @@ extension RecordingController {
         Task { [weak self] in
             guard let self else { return }
             let result = await Paster.paste(finalText)
-            self.logger.info("Paste result: \(String(describing: result), privacy: .public)")
+            let latency = stoppedAt.map { Self.seconds(of: ContinuousClock.now - $0) }
+            self.logger.notice("Paste result: \(String(describing: result), privacy: .public), stop→paste=\(latency.map { String(format: "%.2fs", $0) } ?? "n/a", privacy: .public), live=\(wasLive)")
             switch result {
             case .pasted:
                 self.lastCompletion = .pasted

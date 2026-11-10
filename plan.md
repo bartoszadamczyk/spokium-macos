@@ -101,6 +101,8 @@ Benefits: low latency, bounded memory, no runaway context, partial results survi
 
 ## Known limitations / tuning ideas
 
+- **Parked (2026-11-06): earlier pause cuts when the queue is idle.** Today a chunk can only be cut at a pause once it's ≥ 10 s, so up to ~10–28 s may still need transcribing after stop. Cutting at pauses from ~4–5 s whenever whisper is idle would leave less for the end (est. 0.3–0.7 s faster paste on long dictations). Parked because shorter chunks mean weaker language ID and less context per whisper call; revisit with debug-mode recordings to compare accuracy.
+
 - Pause cuts at 0.8 s can still split mid-sentence; whisper then capitalises the next chunk / adds a period to the previous one. The casing fix currently runs only on overlapped seams. If this shows up, raise `pauseToCutSeconds` or apply the fix to short-pause seams too.
 - The overlap seam casing fix lower-cases capitalised names that genuinely start the next chunk ("Bartek" → "bartek") when the previous chunk didn't end a sentence. Rare (forced cuts only).
 - Silence detection is RMS at 0.01, the same as `SilenceDetector`. Noisy rooms may never "pause" → more forced cuts. Silero VAD (next steps) would fix that.
@@ -117,6 +119,6 @@ Benefits: low latency, bounded memory, no runaway context, partial results survi
 1. [ ] Run the manual test checklist above
 2. [ ] Decide D5, then implement retry / recovery UI (keep chunk audio or samples of failed chunks; "Retry last recording" menu item)
 3. [ ] Tune D7 chunk parameters on real recordings (debug mode sidecars help)
-4. [ ] Silero VAD for chunk cuts (needs a VAD model download + SHA-1)
+4. [x] Silero VAD for chunk cuts — bundled (0.9 MB) instead of downloaded; RMS kept as fallback and hidden A/B switch (`voiceActivityDetection`)
 5. [ ] Parakeet experiment (dictionary won't apply)
 6. [ ] Commit in logical pieces: bug fixes / dev bundle / framework bump / live transcription

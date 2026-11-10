@@ -15,6 +15,13 @@ enum ModelPerformanceStore {
 
 
 
+    // Runs with the Core ML (Neural Engine) encoder are tracked separately from plain
+    // Metal/GPU runs so the two can be compared. GPU keeps the bare stem, so existing
+    // stats carry over.
+    nonisolated static func key(modelStem: String, coreML: Bool) -> String {
+        coreML ? "\(modelStem)+coreml" : modelStem
+    }
+
     static func record(modelStem: String, audioSeconds: Double, transcribeSeconds: Double) {
         guard let merged = merge(into: load()[modelStem], audioSeconds: audioSeconds, transcribeSeconds: transcribeSeconds)
         else { return }

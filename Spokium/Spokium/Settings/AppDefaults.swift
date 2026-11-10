@@ -17,6 +17,8 @@ nonisolated enum DefaultsKey {
     static let pushToRecord = "pushToRecord"
     static let playSounds = "playSounds"
     static let snippets = "snippets"
+    static let quietEndpoints = "quietEndpoints"
+    static let selectedQuietEndpoint = "selectedQuietEndpoint"
     static let maxRecordingMinutes = "maxRecordingMinutes"
     static let modelPerformance = "modelPerformance"
     static let keepRecentTranscripts = "keepRecentTranscripts"
@@ -26,6 +28,9 @@ nonisolated enum DefaultsKey {
     // Hidden developer toggle. No UI surface — enable via terminal:
     //   defaults write com.spokium.mac debugMode -bool true
     static let debugMode = "debugMode"
+    // Hidden A/B switch for live chunking: Silero VAD (default) vs. the old RMS check.
+    //   defaults write com.spokium.mac voiceActivityDetection -bool false
+    static let voiceActivityDetection = "voiceActivityDetection"
 }
 
 // Typed read/write accessors for everything in `DefaultsKey`. Pure functions over
@@ -36,15 +41,20 @@ nonisolated enum AppDefaults {
     // easy to find/change without grepping for the access site.
     static let selectedLanguageDefault = "auto"
     static let paragraphSplittingDefault = true
-    static let silenceThresholdDefault: Double = 3.0
+    static let silenceThresholdDefault: Double = 4.0
     static let autoPasteDefault = true
     static let preserveClipboardDefault = true
-    static let dictionaryEntriesDefault = ""
+    // An example entry so the empty tab shows how it works.
+    static let dictionaryEntriesDefault = "Spokium"
     static let selectedInputDeviceDefault = ""
+    static let selectedQuietEndpointDefault = ""
     static let pushToRecordDefault = false
-    static let playSoundsDefault = false
-    static let keepRecentTranscriptsDefault = false
-    static let maxRecordingMinutesDefault: Double = 10.0
+    static let playSoundsDefault = true
+    static let keepRecentTranscriptsDefault = true
+    static let maxRecordingMinutesDefault: Double = 30.0
+    // 0 = no limit. Earlier versions offered 1/2/5 minutes; those are mapped up to the
+    // nearest current option (see normalizedMaxRecordingMinutes).
+    static let maxRecordingMinutesOptions: [Double] = [10, 20, 30, 60]
     static let liveTranscriptionDefault = true
     // Comma-separated whisper language codes; empty means "any language".
     static let autoDetectLanguagesDefault = ""
@@ -89,6 +99,12 @@ nonisolated enum AppDefaults {
         set { store.set(newValue, forKey: DefaultsKey.selectedModel) }
     }
 
+    // QuietEndpoint.id as a string; "" = none.
+    static var selectedQuietEndpoint: String {
+        get { store.string(forKey: DefaultsKey.selectedQuietEndpoint) ?? selectedQuietEndpointDefault }
+        set { store.set(newValue, forKey: DefaultsKey.selectedQuietEndpoint) }
+    }
+
     static var selectedInputDevice: String {
         get { store.string(forKey: DefaultsKey.selectedInputDevice) ?? selectedInputDeviceDefault }
         set { store.set(newValue, forKey: DefaultsKey.selectedInputDevice) }
@@ -100,17 +116,17 @@ nonisolated enum AppDefaults {
     }
 
     static var playSounds: Bool {
-        get { store.bool(forKey: DefaultsKey.playSounds) }
+        get { store.object(forKey: DefaultsKey.playSounds) as? Bool ?? playSoundsDefault }
         set { store.set(newValue, forKey: DefaultsKey.playSounds) }
     }
 
     static var keepRecentTranscripts: Bool {
-        get { store.bool(forKey: DefaultsKey.keepRecentTranscripts) }
+        get { store.object(forKey: DefaultsKey.keepRecentTranscripts) as? Bool ?? keepRecentTranscriptsDefault }
         set { store.set(newValue, forKey: DefaultsKey.keepRecentTranscripts) }
     }
 
     static var maxRecordingMinutes: Double {
-        get { store.object(forKey: DefaultsKey.maxRecordingMinutes) as? Double ?? maxRecordingMinutesDefault }
+        get { normalizedMaxRecordingMinutes(store.object(forKey: DefaultsKey.maxRecordingMinutes) as? Double ?? maxRecordingMinutesDefault) }
         set { store.set(newValue, forKey: DefaultsKey.maxRecordingMinutes) }
     }
 
@@ -129,9 +145,18 @@ nonisolated enum AppDefaults {
         set { store.set(newValue.joined(separator: ","), forKey: DefaultsKey.autoDetectLanguages) }
     }
 
+    static func normalizedMaxRecordingMinutes(_ minutes: Double) -> Double {
+        guard minutes > 0 else { return 0 }
+        return maxRecordingMinutesOptions.first { $0 >= minutes } ?? maxRecordingMinutesOptions.last ?? minutes
+    }
+
     // Read-only on purpose. Not exposed in Settings; enable via terminal:
     //   defaults write com.spokium.mac debugMode -bool true
     static var debugMode: Bool {
         store.bool(forKey: DefaultsKey.debugMode)
+    }
+
+    static var voiceActivityDetection: Bool {
+        store.object(forKey: DefaultsKey.voiceActivityDetection) as? Bool ?? true
     }
 }

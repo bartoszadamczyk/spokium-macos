@@ -5,7 +5,7 @@ struct SnippetsTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Replace spoken phrases with text. Matches whole words case-insensitively.")
+            Text("Replace spoken phrases with text. Matches whole words case-insensitively. Type \\n in a replacement for a line break.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 

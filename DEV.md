@@ -52,6 +52,18 @@ Debug recordings for the dev build land in `~/Library/Containers/com.spokium.mac
 - **Hotkeys must differ.** Only one app can register a given Carbon hotkey; the second silently gets nothing. Keep the two shortcuts different if you change either.
 - **Both builds record and paste.** Only the app whose hotkey you pressed is listening, so they don't conflict, but make sure you know which one you triggered.
 
+## Pre-release checks
+
+`scripts/check.sh` (≈ 40 s) catches a release that builds but is subtly broken:
+
+| Command | Runs |
+|---|---|
+| `./scripts/check.sh` | log-privacy grep, all tests, a Release build, then bundle checks on it |
+| `./scripts/check.sh --tests` | tests only |
+| `./scripts/check.sh path/to/Spokium.app` | bundle checks plus Developer ID, team, stapled ticket and Gatekeeper |
+
+Bundle checks: bundle id `com.spokium.mac`, `LSUIElement`, exactly the three entitlements, hardened runtime, deep signature, embedded `whisper.framework`, bundled Silero model with its SHA-256. `release.sh` runs `--tests` before bumping the version and the app form on the stapled export, and stops before installing if anything fails. Logs go to `build/check-*.log`.
+
 ## Rebuilding whisper.xcframework
 
 ```sh
@@ -66,3 +78,15 @@ Build outside the repo. Diff `whisper.h` between the old and new framework befor
 ## Why not a VM
 
 A macOS VM (UTM, Tart, Parallels) is still useful for **clean-install testing**: first-run permission prompts, or a Mac with no models. For daily development it's worse. Metal acceleration in macOS guests is limited, so whisper runs much slower, and microphone and Bluetooth passthrough are unreliable. Those are exactly the things this app needs to exercise.
+
+## Reading logs
+
+In zsh, `log` is a shell builtin, so always call the macOS tool by its full path:
+
+```sh
+/usr/bin/log show --last 1h --info --predicate 'subsystem == "com.spokium.mac"' \
+  | grep -E "Model loaded|stop→paste|Transcribed:|chunk queued|Auto-detected"
+```
+
+Add `AND processImagePath CONTAINS "Debug"` to the predicate to see only the dev build.
+

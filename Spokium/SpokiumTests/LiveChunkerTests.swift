@@ -100,4 +100,59 @@ struct LiveChunkerTests {
         #expect(wholeChunks == incrementalChunks)
         #expect(whole.flush() == incremental.flush())
     }
+
+    // Treats windows whose first sample is non-zero as speech, so tests can script
+    // exactly what the "VAD" sees.
+    private struct ScriptedClassifier: SpeechClassifier {
+        let windowSamples = 512
+        func classify(_ samples: ArraySlice<Float>) -> [Bool] {
+            stride(from: samples.startIndex, to: samples.endIndex, by: windowSamples).map { samples[$0] != 0 }
+        }
+        func reset() {}
+    }
+
+    private func minSpeechChunker() -> LiveChunker {
+        var config = LiveChunker.Config()
+        config.minSpeechSeconds = 0.25
+        return LiveChunker(config: config, classifier: ScriptedClassifier())
+    }
+
+    @Test
+    func inaudibleBlipBelowMinSpeech_isDropped() {
+        var chunker = minSpeechChunker()
+        let blip = speech(0.1).map { $0 * 0.01 }
+        #expect(chunker.append(silence(3) + blip + silence(3)).isEmpty)
+        #expect(chunker.flush() == nil)
+    }
+
+    // A VAD that never hears speech — what Silero does with real whispering.
+    private struct DeafClassifier: SpeechClassifier {
+        let windowSamples = 512
+        func classify(_ samples: ArraySlice<Float>) -> [Bool] {
+            Array(repeating: false, count: samples.count / windowSamples)
+        }
+        func reset() {}
+    }
+
+    @Test
+    func audibleAudio_isKept_evenWhenTheVADHearsNoSpeech() {
+        var config = LiveChunker.Config()
+        config.minSpeechSeconds = 0.25
+        var chunker = LiveChunker(config: config, classifier: DeafClassifier())
+        let whisper = speech(3).map { $0 * 0.1 }  // RMS 0.01
+        _ = chunker.append(silence(2) + whisper)
+        let chunk = chunker.flush()
+        #expect(chunk != nil)
+        #expect((chunk?.duration ?? 0) >= 3)
+    }
+
+    @Test
+    func speechOnsetSurvivesTrim_whileBelowMinSpeech() {
+        var chunker = minSpeechChunker()
+        _ = chunker.append(silence(5) + speech(2))
+        let chunk = chunker.flush()
+        // 2 s of speech plus at most the kept leading silence.
+        let duration = chunk?.duration ?? 0
+        #expect(duration >= 2 && duration < 3.1)
+    }
 }

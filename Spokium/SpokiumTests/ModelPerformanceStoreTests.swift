@@ -73,4 +73,10 @@ struct ModelPerformanceStoreTests {
         let r = record(count: 3, audio: 10, transcribe: 2)
         #expect(r.summary == "5.0× real-time · 3 runs")
     }
+
+    @Test
+    func key_separatesCoreMLFromGPU() {
+        #expect(ModelPerformanceStore.key(modelStem: "ggml-large-v3", coreML: false) == "ggml-large-v3")
+        #expect(ModelPerformanceStore.key(modelStem: "ggml-large-v3", coreML: true) == "ggml-large-v3+coreml")
+    }
 }

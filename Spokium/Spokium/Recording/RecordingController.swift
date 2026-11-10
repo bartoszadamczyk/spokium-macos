@@ -7,7 +7,22 @@ import OSLog
 @Observable
 @MainActor
 final class RecordingController {
-    var state: RecordingState = .idle
+    var state: RecordingState = .idle {
+        didSet {
+            // Quiet from the moment the mic starts until stop; transcription needs no quiet.
+            let wasCapturing = oldValue == .starting || oldValue == .recording
+            let isCapturing = state == .starting || state == .recording
+            if isCapturing, !wasCapturing { roomQuieter.begin() }
+            if wasCapturing, !isCapturing { roomQuieter.end() }
+        }
+    }
+    let roomQuieter = RoomQuieter()
+
+    // Moving rooms mid-recording: un-mute the old device, mute the new one.
+    func quietEndpointChanged() {
+        guard state == .starting || state == .recording else { return }
+        roomQuieter.begin()
+    }
     var lastError: RecordingError?
     var persistentError: RecordingError?
     var lastCompletion: CompletionFeedback?
@@ -36,7 +51,8 @@ final class RecordingController {
         let manager = ModelManager()
         guard let url = manager.selectedModelURL else { return nil }
         let stem = url.deletingPathExtension().lastPathComponent
-        guard let stats = ModelPerformanceStore.read(modelStem: stem),
+        let coreML = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: url).path)
+        guard let stats = ModelPerformanceStore.read(modelStem: ModelPerformanceStore.key(modelStem: stem, coreML: coreML)),
               stats.speedRatio > 0
         else { return nil }
 
@@ -67,6 +83,7 @@ final class RecordingController {
     var pendingStartCancel = false
     var isResumingAfterSplit = false
     var stopTailTask: Task<Void, Never>?
+    var stopRequestedAt: ContinuousClock.Instant?
     private var lastToggleAt: ContinuousClock.Instant?
 
     // Per-session accumulated transcripts. Appended by the queue's onComplete
@@ -81,12 +98,15 @@ final class RecordingController {
     var isLiveSession = false
     var liveSink: LiveSampleSink?
     var liveChunker = LiveChunker()
+    // Loaded on the first live session and kept: the model is tiny and init isn't free.
+    var sileroClassifier: SileroSpeechClassifier?
     var liveAssembler: LiveTranscriptAssembler?
     var livePumpTask: Task<Void, Never>?
     var liveSessionFiles: [URL] = []
     var liveDebugSegments: [DebugSegment] = []
     var liveAudioOffset: Double = 0
     var liveLanguageCharacters: [String: Int] = [:]
+    var liveLastLanguage: String?
 
     init() {
         KeyboardShortcuts.onKeyDown(for: .toggleRecording) { [weak self] in
@@ -97,6 +117,30 @@ final class RecordingController {
         }
         recorder.onConfigurationChange = { [weak self] in
             self?.handleAudioConfigurationChange()
+        }
+        AudioInputDeviceCache.shared.startListening()
+        NotificationCenter.default.addObserver(
+            forName: .audioInputDevicesChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let removed = note.object as? [AudioInputDevice] ?? []
+            MainActor.assumeIsolated {
+                self?.inputDevicesChanged(removed: removed)
+            }
+        }
+        // A newly installed Core ML encoder is compiled for the Neural Engine on first
+        // load, which can take minutes. Do that now rather than on the next dictation.
+        NotificationCenter.default.addObserver(
+            forName: .coreMLEncoderChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let modelURL = note.object as? URL else { return }
+            MainActor.assumeIsolated {
+                guard let self, ModelManager().selectedModelURL == modelURL else { return }
+                self.queue.warmUp(modelURL: modelURL)
+            }
         }
     }
 
@@ -128,6 +172,7 @@ final class RecordingController {
     }
 
     func cleanup() async {
+        roomQuieter.end()
         // Halt whisper between graph computations. unload() below serialises after
         // the in-flight transcribe() exits, so it sees the freed-context state.
         queue.abort()
@@ -147,6 +192,8 @@ final class RecordingController {
 
         queue.cancelAll()
         endLiveSession(persistDebug: false)
+        // Don't leave the last transcript on the clipboard if we quit before the restore.
+        ClipboardRestorer.shared.restoreNow()
         history.clear()
         await queue.unload()
     }

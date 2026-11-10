@@ -180,3 +180,22 @@ struct SilenceDetectorTests {
         #expect(abs(first - 1.0) < 0.001)
     }
 }
+
+@MainActor
+struct SpeechFlagSilenceTests {
+    @Test
+    func longSilenceRun_reportsMidpoint_trailingSilenceIgnored() {
+        // 1 s speech, 1 s silence, 1 s speech, 1 s trailing silence at 0.1 s windows.
+        let flags = Array(repeating: true, count: 10) + Array(repeating: false, count: 10)
+            + Array(repeating: true, count: 10) + Array(repeating: false, count: 10)
+        let breaks = SilenceDetector.breaks(speech: flags, windowSeconds: 0.1, minSilenceDuration: 1.0)
+        #expect(breaks.count == 1)
+        #expect(abs((breaks.first ?? 0) - 1.5) < 0.001)
+    }
+
+    @Test
+    func shortSilence_isNotABreak() {
+        let flags = [true, true, false, false, true]
+        #expect(SilenceDetector.breaks(speech: flags, windowSeconds: 0.1, minSilenceDuration: 0.3).isEmpty)
+    }
+}

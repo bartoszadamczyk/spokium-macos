@@ -138,7 +138,7 @@ These should not remain as roadmap items unless a new bug is found:
 - Persistent transcription history UI (the opt-in memory-only `TranscriptHistory` is the agreed compromise).
 - LLM-based rewriting of transcripts.
 - Live streaming captions as a primary feature. Partial preview is interesting but conflicts with the current "short dictation -> final pass -> paste" app shape and adds real complexity around incremental audio, GPU contention, cancellation, and UI churn.
-- App automation features such as pausing Music/Spotify when recording. They would push Spokium toward Apple Events or broader event synthesis and weaken the current security story.
+- App automation features such as pausing Music/Spotify when recording. They would push Spokium toward Apple Events or broader event synthesis and weaken the current security story. (Exception accepted 2026-11-08: "Quiet while recording" — bare POST/DELETE to URLs the user enters, local network only; see AGENTS.md.)
 - Salting `initial_prompt` with a neutral phrase to dodge whisper hallucinations. Less principled than the temperature retry fallback; same effect with more unpredictability. Revisit only if temperature retry isn't enough.
 
 ## Delivered Phases (historical)

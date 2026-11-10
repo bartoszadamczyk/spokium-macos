@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var queueStatusItem: NSMenuItem!
     var inputDeviceMenu: NSMenu!
     var modelMenu: NSMenu!
+    var quietMenu: NSMenu!
+    var quietItem: NSMenuItem!
     var recentTranscriptsItem: NSMenuItem!
     var recentTranscriptsMenu: NSMenu!
     var revealDebugFolderItem: NSMenuItem!

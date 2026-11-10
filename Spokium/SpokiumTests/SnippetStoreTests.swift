@@ -162,3 +162,36 @@ struct SnippetStoreTests {
         #expect(result == "hello earth")
     }
 }
+
+@MainActor
+struct LineBreakSnippetTests {
+    private let commands = SnippetStore.defaultSnippets
+
+    @Test
+    func defaults_areNewParagraphAndNewLine() {
+        #expect(commands.map(\.trigger) == ["new paragraph", "new line"])
+    }
+
+    @Test
+    func newParagraph_afterSentence_keepsPeriod_dropsCommandPunctuation() {
+        #expect(SnippetStore.apply(commands, to: "First point. New paragraph. Second point.")
+            == "First point.\n\nSecond point.")
+    }
+
+    @Test
+    func newLine_betweenCommas_dropsThem_andCapitalisesNext() {
+        #expect(SnippetStore.apply(commands, to: "Milk, new line, eggs, new line, bread")
+            == "Milk\nEggs\nBread")
+    }
+
+    @Test
+    func commandAtEnd_leavesTrailingBreak() {
+        #expect(SnippetStore.apply(commands, to: "Done. New line.") == "Done.\n")
+    }
+
+    @Test
+    func escapedNewline_inOrdinarySnippet_becomesLineBreak() {
+        let sign = [Snippet(trigger: "sign off", replacement: "Cheers,\\nBartek")]
+        #expect(SnippetStore.apply(sign, to: "Thanks sign off") == "Thanks Cheers,\nBartek")
+    }
+}

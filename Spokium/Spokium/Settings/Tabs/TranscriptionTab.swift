@@ -5,9 +5,6 @@ struct TranscriptionTab: View {
     @AppStorage(DefaultsKey.selectedLanguage) private var selectedLanguage = AppDefaults.selectedLanguageDefault
     @AppStorage(DefaultsKey.paragraphSplitting) private var paragraphSplitting = AppDefaults.paragraphSplittingDefault
     @AppStorage(DefaultsKey.silenceThreshold) private var minSilenceDuration = AppDefaults.silenceThresholdDefault
-    @AppStorage(DefaultsKey.autoPaste) private var autoPaste = AppDefaults.autoPasteDefault
-    @AppStorage(DefaultsKey.preserveClipboard) private var preserveClipboard = AppDefaults.preserveClipboardDefault
-    @AppStorage(DefaultsKey.maxRecordingMinutes) private var maxRecordingMinutes = AppDefaults.maxRecordingMinutesDefault
     @AppStorage(DefaultsKey.liveTranscription) private var liveTranscription = AppDefaults.liveTranscriptionDefault
     @AppStorage(DefaultsKey.autoDetectLanguages) private var autoDetectLanguages = AppDefaults.autoDetectLanguagesDefault
     @State private var languageUsage: [String: Int] = [:]
@@ -16,10 +13,21 @@ struct TranscriptionTab: View {
         autoDetectLanguages.split(separator: ",").map(String.init).filter { !$0.isEmpty }
     }
 
-    private var detectAmongLabel: String {
-        let codes = selectedDetectCodes
+    // One menu drives both stored keys: nothing ticked = auto-detect anything; one
+    // language = forced; several = auto-detect with that list as the allowed set.
+    private var chosenLanguages: [String] {
+        selectedLanguage == "auto" ? selectedDetectCodes : [selectedLanguage]
+    }
+
+    private func setChosenLanguages(_ codes: [String]) {
+        selectedLanguage = codes.count == 1 ? codes[0] : "auto"
+        autoDetectLanguages = codes.joined(separator: ",")
+    }
+
+    private var languageLabel: String {
+        let codes = chosenLanguages
         guard !codes.isEmpty else { return "Any language" }
-        let names = WhisperLanguage.all.filter { codes.contains($0.code) }.map(\.displayName)
+        let names = codes.compactMap { code in WhisperLanguage.all.first { $0.code == code }?.displayName }
         return names.formatted(.list(type: .and))
     }
 
@@ -33,63 +41,48 @@ struct TranscriptionTab: View {
             .joined(separator: " · ")
     }
 
-    private func detectBinding(for code: String) -> Binding<Bool> {
+    private func languageBinding(for code: String) -> Binding<Bool> {
         Binding(
-            get: { selectedDetectCodes.contains(code) },
+            get: { chosenLanguages.contains(code) },
             set: { isOn in
-                var codes = selectedDetectCodes.filter { $0 != code }
+                var codes = chosenLanguages.filter { $0 != code }
                 if isOn { codes.append(code) }
-                autoDetectLanguages = codes.joined(separator: ",")
+                setChosenLanguages(codes)
             }
         )
     }
 
     var body: some View {
         Form {
-            Section("Transcription") {
-                Picker("Language:", selection: $selectedLanguage) {
-                    Text("Auto-detect").tag("auto")
-                    Divider()
-                    ForEach(WhisperLanguage.all) { lang in
-                        Text(lang.displayName).tag(lang.code)
-                    }
-                }
-                if selectedLanguage == "auto" {
-                    LabeledContent("Languages I speak:") {
-                        Menu(detectAmongLabel) {
-                            Button("Any language") { autoDetectLanguages = "" }
-                            Divider()
-                            ForEach(WhisperLanguage.all) { lang in
-                                Toggle(lang.displayName, isOn: detectBinding(for: lang.code))
-                            }
+            Section("Language") {
+                LabeledContent("Language:") {
+                    Menu(languageLabel) {
+                        Button("Any language") { setChosenLanguages([]) }
+                        Divider()
+                        ForEach(WhisperLanguage.menuOrder) { lang in
+                            Toggle(lang.displayName, isOn: languageBinding(for: lang.code))
                         }
-                        .fixedSize()
                     }
-                    .help("Auto-detect still runs freely, so mixed-language speech stays mixed. Only when it detects a language outside this list (typical for short or quiet phrases) is that part re-transcribed in the language you've used most in the current recording.")
-                    if !languageUsage.isEmpty {
-                        LabeledContent("Your usage:") {
-                            HStack {
-                                Text(usageSummary)
-                                    .foregroundStyle(.secondary)
-                                Button("Reset") {
-                                    LanguageUsageStore.reset()
-                                    languageUsage = [:]
-                                }
-                                .controlSize(.small)
+                    .fixedSize()
+                }
+                .help("Any language: detected freely. One language: everything is transcribed as that language (other languages get translated into it). Two or more: detection stays free, so mixed speech stays mixed, but a phrase detected as a language outside your list is redone in your main language.")
+                // A single language at 100% says nothing.
+                if languageUsage.count > 1 {
+                    LabeledContent("Your usage:") {
+                        HStack {
+                            Text(usageSummary)
+                                .foregroundStyle(.secondary)
+                            Button("Reset") {
+                                LanguageUsageStore.reset()
+                                languageUsage = [:]
                             }
+                            .controlSize(.small)
                         }
-                        .help("Characters transcribed per detected language, across all recordings. Only counts are stored — never text. Used as the fallback language when a recording has no history yet.")
                     }
+                    .help("Characters transcribed per detected language, across all recordings. Only counts are stored — never text. Used as the fallback language when a recording has no history yet.")
                 }
-                Picker("Auto-stop after:", selection: $maxRecordingMinutes) {
-                    Text("1 minute").tag(1.0)
-                    Text("2 minutes").tag(2.0)
-                    Text("5 minutes").tag(5.0)
-                    Text("10 minutes").tag(10.0)
-                    Text("30 minutes").tag(30.0)
-                    Divider()
-                    Text("No limit").tag(0.0)
-                }
+            }
+            Section("Processing") {
                 Toggle(isOn: $liveTranscription) {
                     Text("Transcribe while recording")
                     Text("Processes speech in short chunks as you talk, so long recordings paste almost immediately.")
@@ -98,55 +91,21 @@ struct TranscriptionTab: View {
                 if paragraphSplitting {
                     HStack {
                         Text("Silence threshold:")
-                        Slider(value: $minSilenceDuration, in: 0.5...5.0, step: 0.5)
+                        Slider(value: $minSilenceDuration, in: 0.5...6.0, step: 0.5)
                         Text("\(minSilenceDuration, specifier: "%.1f")s")
                             .monospacedDigit()
                             .frame(width: 30, alignment: .trailing)
                     }
                 }
             }
-            Section("Output") {
-                Toggle("Auto-paste into focused window", isOn: $autoPaste)
-                if autoPaste {
-                    Toggle("Restore clipboard after paste", isOn: $preserveClipboard)
-                    AccessibilityStatusRow()
-                }
-            }
         }
         .formStyle(.grouped)
-        .onAppear { languageUsage = LanguageUsageStore.all() }
-    }
-}
-
-struct AccessibilityStatusRow: View {
-    @State private var hasPermission = Paster.hasAccessibilityPermission()
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: hasPermission ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(hasPermission ? AnyShapeStyle(.green) : AnyShapeStyle(.orange))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(hasPermission
-                    ? "Accessibility permission granted — paste is ready."
-                    : "Accessibility permission required to paste.")
-                    .font(.callout)
-                if !hasPermission {
-                    Text("Without it, Spokium can only copy to the clipboard.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if !hasPermission {
-                Button("Request Permission") {
-                    Paster.requestAccessibilityPermission()
-                }
-            }
-        }
-        .task {
-            while !Task.isCancelled {
-                hasPermission = Paster.hasAccessibilityPermission()
-                try? await Task.sleep(for: .seconds(1.5))
+        .onAppear {
+            languageUsage = LanguageUsageStore.all()
+            // Older settings could hold auto-detect with a one-language list; the menu shows
+            // that as a single choice, so make it behave like one.
+            if selectedLanguage == "auto", selectedDetectCodes.count == 1 {
+                setChosenLanguages(selectedDetectCodes)
             }
         }
     }
@@ -173,4 +132,10 @@ struct WhisperLanguage: Identifiable {
         }
         return langs
     }()
+
+    // English first (the most common pick), then alphabetical by name.
+    static let menuOrder: [WhisperLanguage] = all.sorted { lhs, rhs in
+        if lhs.code == "en" || rhs.code == "en" { return lhs.code == "en" }
+        return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+    }
 }

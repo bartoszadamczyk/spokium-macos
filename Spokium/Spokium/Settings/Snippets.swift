@@ -16,9 +16,18 @@ enum SnippetStore {
     static func load() -> [Snippet] {
         guard let data = UserDefaults.standard.data(forKey: DefaultsKey.snippets),
               let snippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
-            return []
+            // Never saved: seed examples. Once the user edits the list (even to empty)
+            // the key exists and these don't come back.
+            return defaultSnippets
         }
         return snippets
+    }
+
+    static var defaultSnippets: [Snippet] {
+        [
+            Snippet(trigger: "new paragraph", replacement: "\\n\\n"),
+            Snippet(trigger: "new line", replacement: "\\n"),
+        ]
     }
 
     static func save(_ snippets: [Snippet]) {
@@ -44,15 +53,41 @@ enum SnippetStore {
             // \W in NSRegularExpression is Unicode-aware by default, so accented
             // and CJK characters are treated as word chars correctly.
             let escaped = NSRegularExpression.escapedPattern(for: trigger)
-            let pattern = "(?:^|(?<=\\W))" + escaped + "(?:$|(?=\\W))"
+            // The Replacement field is single-line, so "\n" is how a line break is typed.
+            let replacement = snippet.replacement.replacingOccurrences(of: "\\n", with: "\n")
+            let isLineBreak = replacement.contains("\n") && replacement.allSatisfy(\.isWhitespace)
+            var pattern = "(?:^|(?<=\\W))" + escaped + "(?:$|(?=\\W))"
+            if isLineBreak {
+                // Whisper punctuates a spoken command like a phrase ("…end, new line, next" or
+                // "…end. New paragraph. Next"): drop the comma before it and the punctuation
+                // and spaces after it. A sentence-ending mark before it stays.
+                pattern = "(?:[ \\t]*[,;:])?[ \\t]*" + pattern + "[ \\t]*[.,;:!?]?[ \\t]*"
+            }
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
-            let range = NSRange(result.startIndex..., in: result)
-            result = regex.stringByReplacingMatches(
-                in: result,
-                options: [],
-                range: range,
-                withTemplate: NSRegularExpression.escapedTemplate(for: snippet.replacement)
-            )
+            result = isLineBreak
+                ? replaceLineBreaks(regex, with: replacement, in: result)
+                : regex.stringByReplacingMatches(
+                    in: result,
+                    options: [],
+                    range: NSRange(result.startIndex..., in: result),
+                    withTemplate: NSRegularExpression.escapedTemplate(for: replacement)
+                )
+        }
+        return result
+    }
+
+    // Like stringByReplacingMatches, but capitalises the first letter after the break:
+    // whisper continues the sentence in lower case ("New line, eggs").
+    nonisolated private static func replaceLineBreaks(_ regex: NSRegularExpression, with replacement: String, in text: String) -> String {
+        var result = text
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            var after = String(result[range.upperBound...])
+            if let first = after.first, first.isLowercase {
+                after = first.uppercased() + after.dropFirst()
+            }
+            result = result[..<range.lowerBound] + replacement + after
         }
         return result
     }

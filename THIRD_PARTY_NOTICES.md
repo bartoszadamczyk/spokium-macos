@@ -61,3 +61,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ## Whisper models
 
 Whisper model weights downloaded by Spokium (`ggml-tiny.bin`, `ggml-base.bin`, `ggml-small.bin`, `ggml-medium.bin`, `ggml-large-v3.bin`, `ggml-large-v3-turbo.bin`) are obtained from [huggingface.co/ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp). The original Whisper model is released by OpenAI under the MIT License; the GGML conversions on Hugging Face inherit that license.
+
+## Silero VAD
+
+Spokium bundles `ggml-silero-v6.2.0.bin`, the [Silero VAD](https://github.com/snakers4/silero-vad) voice activity detection model (MIT License, Copyright (c) 2020-present Silero Team) in the GGML conversion published at [huggingface.co/ggml-org/whisper-vad](https://huggingface.co/ggml-org/whisper-vad) (MIT License). SHA-256: `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987`.

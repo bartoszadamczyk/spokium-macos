@@ -13,32 +13,28 @@ enum Paster {
     @discardableResult
     static func paste(_ text: String) async -> PasteResult {
         let autoPaste = AppDefaults.autoPaste
-        let preserveClipboard = AppDefaults.preserveClipboard
         let pasteboard = NSPasteboard.general
+        let restorer = ClipboardRestorer.shared
 
-        if autoPaste && !hasAccessibilityPermission() {
-            _ = writeToPasteboard(pasteboard, text: text)
+        // Saved in every mode (auto-paste, copy-only, missing permission): the transcript
+        // stays on the clipboard for a manual ⌘V, then the previous contents come back.
+        let original = AppDefaults.preserveClipboard ? restorer.captureOriginal() : nil
+        let changeCount = writeToPasteboard(pasteboard, text: text)
+        if let original {
+            restorer.scheduleRestore(original, expectedChangeCount: changeCount)
+        }
+
+        guard autoPaste else { return .copied }
+
+        if !hasAccessibilityPermission() {
             triggerAccessibilityPrompt()
             logger.error("Auto-paste blocked — Accessibility permission missing; text left on clipboard")
             return .failedNoAccessibility
         }
 
-        let savedData = preserveClipboard && autoPaste ? savePasteboard(pasteboard) : nil
-        let changeCountAfterWrite = writeToPasteboard(pasteboard, text: text)
-
-        guard autoPaste else { return .copied }
-
         guard simulateCommandV() else {
             logger.error("Failed to simulate ⌘V")
-            if let savedData {
-                restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
-            }
             return .failedNoAccessibility
-        }
-
-        if let savedData {
-            try? await Task.sleep(for: .milliseconds(150))
-            restorePasteboard(pasteboard, saved: savedData, expectedChangeCount: changeCountAfterWrite)
         }
         return .pasted
     }
@@ -72,21 +68,6 @@ enum Paster {
         }
     }
 
-    private static func savePasteboard(_ pasteboard: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
-        var saved: [[(NSPasteboard.PasteboardType, Data)]] = []
-        guard let items = pasteboard.pasteboardItems else { return saved }
-        for item in items {
-            var itemData: [(NSPasteboard.PasteboardType, Data)] = []
-            for type in item.types {
-                if let data = item.data(forType: type) {
-                    itemData.append((type, data))
-                }
-            }
-            saved.append(itemData)
-        }
-        return saved
-    }
-
     private static func writeToPasteboard(_ pasteboard: NSPasteboard, text: String) -> Int {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -109,23 +90,4 @@ enum Paster {
         return true
     }
 
-    private static func restorePasteboard(
-        _ pasteboard: NSPasteboard,
-        saved: [[(NSPasteboard.PasteboardType, Data)]],
-        expectedChangeCount: Int
-    ) {
-        guard pasteboard.changeCount == expectedChangeCount else { return }
-        pasteboard.clearContents()
-        guard !saved.isEmpty else { return }
-
-        var newItems: [NSPasteboardItem] = []
-        for itemData in saved {
-            let item = NSPasteboardItem()
-            for (type, data) in itemData {
-                item.setData(data, forType: type)
-            }
-            newItems.append(item)
-        }
-        pasteboard.writeObjects(newItems)
-    }
 }
