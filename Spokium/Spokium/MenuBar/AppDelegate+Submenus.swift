@@ -118,7 +118,7 @@ extension AppDelegate {
         DebugRecordingStore.revealInFinder()
     }
 
-    // Hidden until a device is added in Settings → General.
+    // Hidden until a device is added in Settings → Integrations.
     func refreshQuietMenu() {
         quietMenu.removeAllItems()
         let endpoints = QuietEndpointStore.load()

@@ -199,7 +199,9 @@ extension RecordingController {
     // Dictionary first, previous text last: whisper keeps the *end* of an over-long
     // prompt, and the immediate context matters most for continuity.
     private func livePrompt() -> String? {
-        let parts = [dictionaryPrompt(), liveAssembler?.tail()]
+        // A flat (lowercase, unpunctuated) tail would teach the next chunk the same style.
+        let tail = liveAssembler.map { $0.tail() }.flatMap { PunctuationStyle.isUnpunctuated($0, minWords: 8) ? nil : $0 }
+        let parts = [dictionaryPrompt(), tail]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " ")

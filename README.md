@@ -7,16 +7,23 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 - **Native, lightweight.** Single Swift app, no Electron, no background daemon zoo.
 - **Lives in the menu bar.** No dock icon (ever, including when Settings is open). The status item shows idle / recording / transcribing state with a pulsing red waveform icon while recording.
 - **Global hotkey to record.** Toggle style (default ⌥Space): tap to start recording, tap again to stop, transcribe, and paste. Push-to-record mode also available (hold while speaking, release to transcribe).
-- **On-device only.** All audio and transcription stays local; no network calls except model downloads.
-- **Menu bar dropdown** with quick switching for input device and active whisper model (no need to open Settings for routine changes).
+- **On-device only.** All audio and transcription stays local. The only network use is model downloads from Hugging Face and, if you set it up, the optional *Quiet while recording* requests to devices on your own network.
+- **Transcribes while you talk.** Speech is cut into short chunks at natural pauses and transcribed as you go, so even a long dictation pastes about a second after you stop. Chunks overlap where no pause is found, and the seams are de-duplicated using word timestamps.
+- **Voice detection.** A bundled [Silero VAD](https://github.com/snakers4/silero-vad) model (0.9 MB, via whisper.cpp) tells speech from typing, clicks and room noise. It decides where to cut chunks and where paragraphs break; silence-only recordings skip whisper entirely. Quiet speech and whispering are kept even when the detector isn't sure.
+- **Languages that mix.** One menu: *Any language*, one language (forced), or several. With several, detection stays free, so mixed Polish/English speech stays mixed, and a phrase detected as a language you don't speak is redone in your main one. Settings shows how much you use each language (counts only, never text).
+- **Flat-output fix.** When whisper returns a long run of lowercase words with no punctuation, the chunk is redone once with a punctuated example sentence in the prompt.
+- **Menu bar dropdown** with quick switching for input device, active whisper model and quiet device (no need to open Settings for routine changes).
+- **Sensible microphone handling.** The device list is cached, so opening the menu no longer drops Bluetooth headphones into low-quality call mode. When the mic you're using disappears, the selection moves to the next best one (built-in → wired → Bluetooth/iPhone) and the menu shows it, so you can correct it before the next recording.
+- **Voice commands for line breaks.** "New line" and "new paragraph" are built-in snippets; type `\n` in any snippet replacement for a line break.
 - **Snippets.** Define spoken triggers like "calendar link" that get replaced with arbitrary text on paste. Case-insensitive, whole-word matching.
 - **Live audio level meter.** Recording overlay shows a microphone icon that fills red from the bottom up based on input volume — instant feedback that the mic is working.
 - **Dead-mic detection.** Catches the common case where `AVAudioEngine` starts but no audio actually flows (e.g. built-in mic with the lid closed — the mic sits in the lid hinge — or AirPods/Continuity that never wake up). Levels are sampled continuously; if 5s pass with no signal at all, the HUD swaps to an orange "No audio — check microphone" warning and a Sosumi alert chime plays once. If audio later resumes, the HUD reverts to the normal level-meter "Recording" state. The warning is one-shot per take — once it has fired and recovered, it stays dismissed until the next mic switch or the next recording, so slow-waking inputs and long pauses don't spam the alert. On stop, the `.caf` file is also verified to exist and be non-empty before the transcription path runs, so a dead recording surfaces as a real error instead of silently producing an empty transcript.
 - **Cancel anytime.** Press Shift+Esc (or the menu item) to discard a recording or abort an in-flight transcription. Whisper's abort callback is wired up, so cancelling during inference actually stops compute.
 - **Auto-stop after time limit.** Configurable maximum recording duration (10, 20, 30 min, 1 h or no limit; default 30 min) prevents accidentally leaving the hotkey on forever.
-- **Settings window** for: language (auto-detect or 99+ languages), model size (tiny / base / small / medium / large-v3 / large-v3-turbo), hotkey (toggle or push-to-record), input device, launch at login, sound effects, auto-stop after N minutes, paragraph splitting, auto-paste, clipboard restore, custom dictionary with token counting, and snippets.
+- **Quiet while recording (Integrations).** Add devices such as a home-made radio by URL; the selected one gets a `POST` when recording starts (repeated every 20 s to extend its mute) and a `DELETE` when you stop. No body, nothing about the recording is sent. Pick the device for the room you're in from the menu.
+- **Settings window** with tabs for General (shortcut, push-to-record, input device, launch at login, sound effects, auto-stop), Transcription (language, live transcription, paragraph splitting), Output (auto-paste, clipboard restore, recent transcripts), Model (download, select, Neural Engine encoders, speed stats), Dictionary (with token counting), Snippets and Integrations.
 - **Optional Neural Engine encoders.** Each downloaded model can get a Core ML encoder (Settings → Model) that runs on the Apple Neural Engine — noticeably faster on Macs with smaller GPUs (e.g. M1/M2 Pro). The first use compiles it once, which can take a few minutes.
-- **Paragraph splitting.** Detects silence gaps in the audio (configurable threshold, default 3s) and inserts paragraph breaks so pasted output keeps structure.
+- **Paragraph splitting.** Detects pauses in your speech (configurable, default 4 s) and inserts paragraph breaks so pasted output keeps structure.
 - **Pastes into the active window.** Uses the system pasteboard + a synthesized ⌘V. Optionally restores your previous clipboard 20 s later — long enough to paste the transcript manually if it landed in the wrong window — unless you copied something else meanwhile. Can also be set to clipboard-only mode (no auto-paste), with the same restore.
 - **Paste feedback overlay.** After transcription the HUD briefly confirms the outcome — "Pasted" when auto-paste fires, "Copied to clipboard" when auto-paste is off, and "No speech detected" (with a soft chime) when the transcript came back empty. No transcript content is stored.
 - **Accessibility preflight.** Settings → Output shows live paste readiness (granted / required) with a "Request Permission" button. The paste pipeline also preflights `AXIsProcessTrusted` before synthesizing ⌘V — without permission the transcript is left on the clipboard instead of dropping silently.
@@ -27,7 +34,7 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 
 - Streaming / live captioning.
 - Cloud transcription.
-- A general voice-assistant UX (no commands, no LLM post-processing in v1).
+- A general voice-assistant UX (no commands beyond line breaks, no LLM post-processing).
 - Multi-user sync, accounts, telemetry.
 
 ## High-level architecture
@@ -45,16 +52,18 @@ A small, native macOS dictation helper. Tap a global keyboard shortcut to start 
 │  KeyboardShortcuts ──► global toggle shortcut (⌥Space)      │
 │        │                                                    │
 │        ▼                                                    │
-│  AudioRecorder (AVAudioEngine) ──► native-rate CAF file     │
+│  AudioRecorder (AVAudioEngine) ──► 16 kHz live stream       │
+│        │                          (+ native-rate CAF file)  │
+│        ▼                                                    │
+│  LiveChunker + Silero VAD ──► chunks cut at pauses          │
 │        │                                                    │
 │        ▼                                                    │
-│  AudioLoader ──► resample to 16kHz mono Float32             │
+│  TranscriptionQueue ──► Transcriber (whisper.cpp actor)     │
 │        │                                                    │
-│        ▼                                                    │
-│  Transcriber (whisper.cpp actor) ──► text + language         │
-│        │                                                    │
-│        ├──► silence detection (RMS energy) ──► paragraphs   │
 │        ├──► dictionary biasing (initial_prompt)             │
+│        ├──► language fallback, loop + flat-output retries   │
+│        ▼                                                    │
+│  LiveTranscriptAssembler ──► seams, paragraphs, snippets    │
 │        ▼                                                    │
 │  Paster (NSPasteboard + CGEvent ⌘V) ──► active window       │
 └─────────────────────────────────────────────────────────────┘
@@ -66,18 +75,19 @@ The app runs under App Sandbox. Entitlements are generated from the Xcode target
 
 - `com.apple.security.app-sandbox`
 - `com.apple.security.device.audio-input` — microphone
-- `com.apple.security.network.client` — model downloads from Hugging Face
+- `com.apple.security.network.client` — model downloads from Hugging Face, and Quiet while recording
 
 User-granted permissions (prompted at first use, not at install):
 
 - **Microphone** — backed by `NSMicrophoneUsageDescription` in `Info.plist`.
+- **Local network** — only if you add a Quiet while recording device on your network. macOS asks once (`NSLocalNetworkUsageDescription`); plain `http` is allowed to the local network only (`NSAllowsLocalNetworking`), never to the internet.
 - **Accessibility** — required to synthesize the ⌘V keystroke. User grants this in System Settings → Privacy & Security → Accessibility. Settings → Output surfaces a live readiness indicator with a "Request Permission" button so the grant can happen up front; if missing at paste time, the paste is skipped (transcript stays on the clipboard), an alert is shown, the system prompt is triggered, and a persistent menu row offers either "Open Accessibility Settings…", "Turn Off Auto-paste", or "Dismiss".
 
 ## Decisions
 
-- **Paragraph splitting** — detects silence from the actual audio samples using RMS energy analysis in 50ms windows. A silence gap above the configurable threshold (default 3s) inserts a paragraph break between whisper segments.
+- **Paragraph splitting** — pauses are found with the Silero voice detector (RMS energy in 50 ms windows as a fallback). A pause above the configurable threshold (default 4 s) inserts a paragraph break between whisper segments, and between live chunks.
 - **Custom dictionary** — bias recognition via whisper's `initial_prompt`. The user's custom names/spellings are concatenated into the prompt so the model is more likely to produce them. Dictionary entries are not find/replace rules; snippets handle post-transcription replacement.
-- **Model storage** — no bundled model. The app downloads models on demand into the user Application Support directory, under `Spokium/models` as resolved by `FileManager` (inside the sandbox container for sandboxed builds). Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
+- **Model storage** — no bundled whisper model (the only bundled model is the 0.9 MB Silero voice detector). The app downloads models on demand into the user Application Support directory, under `Spokium/models` as resolved by `FileManager` (inside the sandbox container for sandboxed builds). Settings → Model tab lists available models with size and quality info. Models are downloaded from Hugging Face (`ggerganov/whisper.cpp` repo) and validated with GGML magic bytes and SHA-1 checksums. Models can also be dropped into the folder manually via the "Show in Finder" button.
 - **Download validation** — HTTP status code, GGML format magic bytes, and SHA-1 checksum verification before accepting a downloaded model.
 - **Output options** — auto-paste (default on) and clipboard restore (default on) are independently configurable. With auto-paste off, text is placed on the clipboard only.
 - **Snippets** — post-transcription find/replace. User-defined trigger phrases are matched against the transcript with case-insensitive whole-word matching, replaced before paste.
@@ -95,6 +105,8 @@ These settings must be applied to the Spokium target on a fresh checkout (they l
 | Signing & Capabilities → App Sandbox | Outgoing Connections (Client) | ✓ |
 | Build Settings | `INFOPLIST_KEY_LSUIElement` | **YES** (no dock icon) |
 | Build Settings | `INFOPLIST_KEY_NSMicrophoneUsageDescription` | `"Spokium records audio to transcribe your dictation locally."` |
+| Build Settings | `INFOPLIST_KEY_NSLocalNetworkUsageDescription` | Quiet while recording explanation |
+| `Spokium/Info.plist` | `NSAppTransportSecurity` → `NSAllowsLocalNetworking` | **YES** (merged with the generated plist) |
 | Build Settings | `Swift Language Version` | **6.0** |
 | Build Settings | `Default Actor Isolation` | **MainActor** |
 | Signing & Capabilities | Hardened Runtime | ✓ (required for notarization) |
@@ -131,10 +143,10 @@ On disable, the debug folder is wiped immediately by an in-process observer; a l
 
 The Xcode project links `Spokium/Frameworks/whisper.xcframework`. In this checkout the framework is present and tracked, but it is still treated as a rebuildable artifact from upstream `whisper.cpp`. If the framework is missing, stale, or you want to verify provenance, rebuild it from source:
 
-1. **Clone whisper.cpp as a sibling of this repo:**
+1. **Clone whisper.cpp v1.9.5 as a sibling of this repo** (the version the app is built and tested against):
    ```sh
    cd ~/Codeplace          # or wherever this repo lives
-   git clone https://github.com/ggml-org/whisper.cpp.git
+   git clone --branch v1.9.5 https://github.com/ggml-org/whisper.cpp.git
    ```
 
 2. **Build the XCFramework** (5–15 min on Apple Silicon — builds for arm64 + x86_64 across macOS, iOS, simulators):
@@ -166,5 +178,9 @@ git pull
 cp -R build-apple/whisper.xcframework ~/Codeplace/spokium-macos/Spokium/Frameworks/
 ```
 
-Xcode picks up the updated framework on next build.
+Xcode picks up the updated framework on next build. Run `./scripts/check.sh` afterwards — it builds, runs the tests and checks the bundle.
+
+## Releasing
+
+`./scripts/release.sh <version>` runs the tests, bumps the build number, archives, notarizes, checks the notarized app with `scripts/check.sh` (signing, entitlements, no Dock icon, bundled voice-detection model, Gatekeeper) and installs it to `/Applications`. See `DEV.md` for the dev build and pre-release checks.
 

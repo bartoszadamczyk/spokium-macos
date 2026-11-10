@@ -88,7 +88,7 @@ spokium-macos/
         │   │                       #   SettingsView (TabView root),
         │   │                       #   Snippets (find/replace post-processing)
         │   └── Tabs/               # GeneralTab, TranscriptionTab, OutputTab, ModelTab,
-        │                           #   DictionaryTab, SnippetsTab
+        │                           #   DictionaryTab, SnippetsTab, IntegrationsTab
         └── Assets.xcassets
 ```
 
@@ -140,6 +140,9 @@ The tap also resamples to 16 kHz mono into a `LiveSampleSink`. `RecordingControl
 ### Language handling ("auto" + "Languages I speak")
 Settings shows a single "Language" menu: "Any language" at the top, then a tick per language. Nothing ticked → `selectedLanguage = auto`, empty list; one ticked → `selectedLanguage = <code>` (forced); two or more → `auto` + `autoDetectLanguages`. "Your usage" is shown only once more than one language has been detected.
 "auto" is always passed to whisper **unforced**: the decoder can then keep mixed Polish/English speech in both languages, whereas forcing a language makes it translate the rest. When `autoDetectLanguages` is set and a call's detected language is *outside* that list (typical for short/quiet chunks), `Transcriber` re-runs that call with a forced fallback: `TranscriptionSettings.fallbackLanguage` (in live mode the session's dominant language by accepted characters; otherwise the long-term dominant language from `LanguageUsageStore`, both via `LanguageChooser.dominant`) or, with no history, the most probable listed language (`restrictedDetection` → `whisper_lang_auto_detect` → `LanguageChooser.best`). The re-run only happens on a mismatch, so the normal path costs nothing extra. Live chunks shorter than 3 s (`shortChunkSeconds`) reuse the previous chunk's language (`liveLastLanguage`) instead of auto-detecting — they're too short for reliable language ID and were often detected as Russian; the first chunk of a session always auto-detects.
+
+### Flat-output retry (`PunctuationStyle`)
+Whisper sometimes emits a long run of lowercase words with no punctuation, copying the style of a flat prompt (a bare word list, or a flat previous chunk in live mode). When kept output has ≥ 15 words, no punctuation and no capitals (cased scripts only), `Transcriber` re-runs once with a short punctuated example sentence in the detected language appended to the prompt (en/pl/de/fr/es/it/pt/nl; other languages skip the retry so an English sentence can't pull them towards English). In live mode a flat tail (≥ 8 words) is never used as the next chunk's prompt.
 
 ### End-of-recording handling
 - **Stop tail:** `stop()` moves to `.finishing` immediately but keeps the engine capturing for `stopTail` (300 ms) before `finishStop()` — audio still in the tap pipeline was otherwise lost and clipped the last word. `stopTailTask` guards `continueSession()` (ignored during the tail) and `cancel()` (stops the recorder and discards).
@@ -245,8 +248,8 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `maxRecordingMinutes` | Double | `30` (options 10/20/30/60, 0 = no limit) | GeneralTab, RecordingController auto-stop |
 | `liveTranscription` | Bool | `true` | TranscriptionTab, RecordingController+Live |
 | `autoDetectLanguages` | String (comma-separated codes) | `""` (any) | TranscriptionTab ("Languages I speak"), Transcriber fallback |
-| `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`) | GeneralTab, QuietEndpointStore |
-| `selectedQuietEndpoint` | String (endpoint UUID) | `""` (none) | GeneralTab, menu "Quiet While Recording", RoomQuieter |
+| `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`) | IntegrationsTab, QuietEndpointStore |
+| `selectedQuietEndpoint` | String (endpoint UUID) | `""` (none) | IntegrationsTab, menu "Quiet While Recording", RoomQuieter |
 | `languageUsage` | Data | `{}` (JSON `[code: characters]`) | LanguageUsageStore (recorded in TranscriptionQueue, shown in TranscriptionTab) |
 | `voiceActivityDetection` | Bool (hidden, terminal only) | `true` | RecordingController+Live (Silero VAD vs RMS chunking) |
 

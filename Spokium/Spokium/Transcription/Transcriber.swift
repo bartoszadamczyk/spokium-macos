@@ -152,7 +152,7 @@ actor Transcriber {
         params.language = UnsafePointer(langPtr)
         defer { free(langPtr) }
 
-        let promptPtr = initialPrompt.flatMap { strdup($0) }
+        var promptPtr = initialPrompt.flatMap { strdup($0) }
         defer { free(promptPtr) }
         params.initial_prompt = UnsafePointer(promptPtr)
 
@@ -194,6 +194,21 @@ actor Transcriber {
             if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
                 transcriberLogger.warning("Loop hallucination persisted after retry; dropping output")
                 loopFallbackTriggered = true
+            }
+        }
+
+        // Flat output (all lowercase, no punctuation): re-run once with a punctuated
+        // example sentence at the end of the prompt. The retry's text is kept even if
+        // it's still flat — it's no worse.
+        if !loopFallbackTriggered,
+           PunctuationStyle.isUnpunctuated(keptSegmentTexts(ctx: ctx).joined(separator: " ")) {
+            let detected = whisper_lang_str(whisper_full_lang_id(ctx)).map { String(cString: $0) } ?? "unknown"
+            if let retryPrompt = PunctuationStyle.retryPrompt(original: initialPrompt, language: detected) {
+                transcriberLogger.notice("Unpunctuated lowercase output (\(detected, privacy: .public)); retrying with a punctuated prompt")
+                free(promptPtr)
+                promptPtr = strdup(retryPrompt)
+                params.initial_prompt = UnsafePointer(promptPtr)
+                try runWhisper(ctx: ctx, samples: samples, params: &params)
             }
         }
 

@@ -75,9 +75,10 @@ struct ClipboardRestorerTests {
         let count = put("transcript", on: pb)
         restorer.scheduleRestore(original, expectedChangeCount: count)
 
-        // Poll rather than sleep a fixed amount: under a loaded parallel test run the
-        // restore task can be scheduled late.
-        let deadline = ContinuousClock.now + .seconds(3)
+        // Poll rather than sleep a fixed amount. The deadline is generous because all
+        // @MainActor suites share the main thread: while heavy tests (Silero, audio
+        // loading) run, the restore task can't, which took the old 3 s limit past its end.
+        let deadline = ContinuousClock.now + .seconds(20)
         while pb.string(forType: .string) != "original", ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }

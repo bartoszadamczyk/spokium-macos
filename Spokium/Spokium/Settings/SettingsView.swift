@@ -50,6 +50,8 @@ struct SettingsView: View {
                 .tabItem { Label("Dictionary", systemImage: "text.book.closed") }
             SnippetsTab()
                 .tabItem { Label("Snippets", systemImage: "text.append") }
+            IntegrationsTab()
+                .tabItem { Label("Integrations", systemImage: "point.3.connected.trianglepath.dotted") }
         }
     }
 }

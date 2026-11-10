@@ -101,6 +101,7 @@ Benefits: low latency, bounded memory, no runaway context, partial results survi
 
 ## Known limitations / tuning ideas
 
+- **Parked (2026-11-08): adaptive keep threshold for very quiet whispering.** Measured on a real 33.7 s whispered recording: window RMS 0.001–0.004 (room floor ≈ 0.001) and Silero max 0.14–0.22, so most of it fell below both the 0.005 audible bar and the 0.3 speech threshold; only ~10 s reached whisper, which transcribed it confidently (no_speech 0.000). Idea: keep a window if Silero ≥ 0.1 **or** RMS ≥ ~2.5 × the session's noise floor (10th percentile of recent windows). User reports whispering is "way better" after the current fix, so parked; revisit with debug-mode recordings if quiet whispers still go missing.
 - **Parked (2026-11-06): earlier pause cuts when the queue is idle.** Today a chunk can only be cut at a pause once it's ≥ 10 s, so up to ~10–28 s may still need transcribing after stop. Cutting at pauses from ~4–5 s whenever whisper is idle would leave less for the end (est. 0.3–0.7 s faster paste on long dictations). Parked because shorter chunks mean weaker language ID and less context per whisper call; revisit with debug-mode recordings to compare accuracy.
 
 - Pause cuts at 0.8 s can still split mid-sentence; whisper then capitalises the next chunk / adds a period to the previous one. The casing fix currently runs only on overlapped seams. If this shows up, raise `pauseToCutSeconds` or apply the fix to short-pause seams too.
