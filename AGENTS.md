@@ -85,7 +85,7 @@ spokium-macos/
         │                           #   ClipboardRestorer (delayed restore of previous clipboard)
         ├── Settings/               # ModelManager (download/validate/select models),
         │   │                       #   ModelPerformanceStore, LanguageUsageStore,
-        │   │                       #   SettingsView (TabView root),
+        │   │                       #   SettingsView (TabView root), EditableList (list + / − bar),
         │   │                       #   Snippets (find/replace post-processing)
         │   └── Tabs/               # GeneralTab, TranscriptionTab, OutputTab, ModelTab,
         │                           #   DictionaryTab, SnippetsTab, IntegrationsTab
