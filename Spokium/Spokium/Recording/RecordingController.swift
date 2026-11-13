@@ -33,7 +33,7 @@ final class RecordingController {
     // With sounds on, the start chime plays as recording goes live; ducking right
     // away would make it inaudible, so let it finish first.
     private func startMacVolumeDuck() {
-        guard AppDefaults.macVolumeWhileRecording != .unchanged else { return }
+        guard AppDefaults.lowerMacVolumeWhileRecording else { return }
         duckTask?.cancel()
         let delay: Duration = AppDefaults.playSounds ? .milliseconds(500) : .zero
         duckTask = Task { [weak self] in

@@ -254,7 +254,7 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`) | IntegrationsTab, QuietEndpointStore |
 | `selectedQuietEndpoint` | String (endpoint UUID) | `""` (none) | IntegrationsTab, menu "Quiet While Recording", RoomQuieter |
 | `coreMLUnusableModels` | [String] (model stems) | `[]` | CoreMLHealth (set after a 10-min Neural Engine load), Model tab Retry |
-| `macVolumeWhileRecording` | String (`unchanged`/`lower`/`mute`) | `unchanged` | IntegrationsTab, menu "Quiet While Recording", MacVolumeDucker |
+| `macVolumeWhileRecording` | Bool (1.5.3 stored `unchanged`/`lower`/`mute`, mapped on read) | `false` | IntegrationsTab, menu "Quiet While Recording", MacVolumeDucker |
 | `macVolumeDuck` | Data (JSON, transient) | absent | MacVolumeDucker: volume to restore; present only while a duck is in effect, repaired at launch |
 | `languageUsage` | Data | `{}` (JSON `[code: characters]`) | LanguageUsageStore (recorded in TranscriptionQueue, shown in TranscriptionTab) |
 | `voiceActivityDetection` | Bool (hidden, terminal only) | `true` | RecordingController+Live (Silero VAD vs RMS chunking) |

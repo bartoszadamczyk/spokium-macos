@@ -33,7 +33,7 @@ While you talk, speech is transcribed in chunks, so even a long dictation pastes
 - **Names and jargon:** add them in Settings → **Dictionary** so they're spelled right.
 - **Languages:** Settings → **Transcription** → Language: *Any language*, one language (always transcribed as that language), or several (mixed speech stays mixed).
 - **Menu bar:** switch the microphone, the model, or the device to quiet; re-copy one of the last 5 transcripts (kept in memory for 5 minutes, never on disk).
-- **Quiet while recording:** Settings → **Integrations** (or the menu bar's *Quiet While Recording*) — lower or mute this Mac's sound while you record (put back when you stop, unless you changed the volume yourself), and add devices such as a home-made radio that get a `POST` while you record and a `DELETE` when you stop.
+- **Quiet while recording:** Settings → **Integrations** (or the menu bar's *Quiet While Recording*) — turn this Mac's sound down while you record (back up when you stop, unless you changed the volume yourself), and add devices such as a home-made radio that get a `POST` while you record and a `DELETE` when you stop.
 - **Your clipboard** is restored 20 s after a paste, unless you copied something else meanwhile (Settings → Output).
 
 Nothing you say leaves your Mac: transcription runs locally with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), and transcripts are never written to disk or logs.

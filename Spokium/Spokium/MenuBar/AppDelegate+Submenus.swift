@@ -118,26 +118,17 @@ extension AppDelegate {
         DebugRecordingStore.revealInFinder()
     }
 
-    // "This Mac" (volume while recording) first, then the devices from Settings →
-    // Integrations, if any.
+    // "Lower Mac Volume" first, then the devices from Settings → Integrations, if any.
     func refreshQuietMenu() {
         quietMenu.removeAllItems()
         let endpoints = QuietEndpointStore.load()
         quietItem.isHidden = false
         let selected = AppDefaults.selectedQuietEndpoint
 
-        let macHeader = NSMenuItem(title: "This Mac", action: nil, keyEquivalent: "")
-        macHeader.isEnabled = false
-        quietMenu.addItem(macHeader)
-        let currentMode = AppDefaults.macVolumeWhileRecording
-        for mode in MacVolumeMode.allCases {
-            let item = NSMenuItem(title: mode.title, action: #selector(selectMacVolumeMode(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode.rawValue
-            item.state = mode == currentMode ? .on : .off
-            item.indentationLevel = 1
-            quietMenu.addItem(item)
-        }
+        let lowerItem = NSMenuItem(title: "Lower Mac Volume", action: #selector(toggleLowerMacVolume(_:)), keyEquivalent: "")
+        lowerItem.target = self
+        lowerItem.state = AppDefaults.lowerMacVolumeWhileRecording ? .on : .off
+        quietMenu.addItem(lowerItem)
         guard !endpoints.isEmpty else { return }
         quietMenu.addItem(.separator())
         let devicesHeader = NSMenuItem(title: "Devices", action: nil, keyEquivalent: "")
@@ -164,9 +155,8 @@ extension AppDelegate {
         }
     }
 
-    @objc func selectMacVolumeMode(_ sender: NSMenuItem) {
-        let mode = MacVolumeMode(rawValue: sender.representedObject as? String ?? "") ?? .unchanged
-        AppDefaults.macVolumeWhileRecording = mode
+    @objc func toggleLowerMacVolume(_ sender: NSMenuItem) {
+        AppDefaults.lowerMacVolumeWhileRecording.toggle()
     }
 
     @objc func selectQuietEndpoint(_ sender: NSMenuItem) {

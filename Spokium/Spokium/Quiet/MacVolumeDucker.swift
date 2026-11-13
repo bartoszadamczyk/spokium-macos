@@ -3,28 +3,8 @@ import CoreAudio
 import Foundation
 import OSLog
 
-nonisolated enum MacVolumeMode: String, CaseIterable {
-    case unchanged, lower, mute
-
-    var title: String {
-        switch self {
-        case .unchanged: "Don't change"
-        case .lower: "Lower to 20%"
-        case .mute: "Mute"
-        }
-    }
-
-    // Fraction of the current volume while recording.
-    var factor: Float32 {
-        switch self {
-        case .unchanged: 1
-        case .lower: 0.2
-        case .mute: 0
-        }
-    }
-}
-
-// Lowers the Mac's output volume while recording and puts it back afterwards — via
+// Lowers the Mac's output volume (to 20% of its level) while recording and puts it
+// back afterwards — via
 // Core Audio, no permission needed. Safeguards:
 //   - The original volume is saved before ducking and restored on the next launch if
 //     the app died mid-recording (or the Mac slept and Spokium was quit).
@@ -41,16 +21,16 @@ enum MacVolumeDucker {
     }
 
     private static let logger = Logger(subsystem: "com.spokium.mac", category: "Quiet")
+    private static let duckFactor: Float32 = 0.2
 
     static func duck() {
         restore()
-        let mode = AppDefaults.macVolumeWhileRecording
-        guard mode != .unchanged,
+        guard AppDefaults.lowerMacVolumeWhileRecording,
               let device = defaultOutputDevice(),
               let uid = deviceUID(device),
               isVolumeSettable(device),
               let original = volume(of: device), original > 0 else { return }
-        let target = original * mode.factor
+        let target = original * duckFactor
         // Saved before changing anything, so a crash right here is still repaired.
         save(Duck(deviceUID: uid, original: original, ducked: target))
         setVolume(target, on: device)

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import Spokium
@@ -44,5 +45,20 @@ struct AppDefaultsTests {
     @Test
     func dictionary_defaultsToExampleEntry() {
         #expect(AppDefaults.dictionaryEntriesDefault == "Spokium")
+    }
+
+    @Test
+    func lowerMacVolume_carriesOver153Choices() {
+        let key = DefaultsKey.macVolumeWhileRecording
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+        for (stored, expected) in [("lower", true), ("mute", true), ("unchanged", false)] {
+            UserDefaults.standard.set(stored, forKey: key)
+            #expect(AppDefaults.lowerMacVolumeWhileRecording == expected, "\(stored)")
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(!AppDefaults.lowerMacVolumeWhileRecording)
+        AppDefaults.lowerMacVolumeWhileRecording = true
+        #expect(AppDefaults.lowerMacVolumeWhileRecording)
     }
 }
