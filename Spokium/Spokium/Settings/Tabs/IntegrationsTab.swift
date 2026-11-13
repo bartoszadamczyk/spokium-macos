@@ -2,7 +2,6 @@ import SwiftUI
 
 struct IntegrationsTab: View {
     @Environment(RecordingController.self) private var controller
-    @AppStorage(DefaultsKey.selectedQuietEndpoint) private var selectedQuietEndpoint = AppDefaults.selectedQuietEndpointDefault
     @State private var quietEndpoints: [QuietEndpoint] = QuietEndpointStore.load()
     @State private var lowerMacVolume = AppDefaults.lowerMacVolumeWhileRecording
     @State private var selection: Set<QuietEndpoint.ID> = []
@@ -19,7 +18,7 @@ struct IntegrationsTab: View {
                 .onChange(of: lowerMacVolume) { _, on in AppDefaults.lowerMacVolumeWhileRecording = on }
                 .help("Turns this Mac's sound down while you record and back up when you stop — unless you changed the volume yourself in the meantime.")
 
-            Text("Devices such as a home-made radio. Spokium sends POST when recording starts, repeats it every 20 s, and DELETE when you stop. Nothing about the recording is sent.")
+            Text("Devices such as a home-made radio — tick the ones to quiet. Spokium sends each a POST when recording starts, repeats it every 20 s, and DELETE when you stop. Nothing about the recording is sent.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -36,6 +35,12 @@ struct IntegrationsTab: View {
                 List(selection: $selection) {
                     ForEach($quietEndpoints) { $endpoint in
                         HStack(spacing: 8) {
+                            Toggle("Quiet while recording", isOn: Binding(
+                                get: { endpoint.enabled },
+                                set: { endpoint.isEnabled = $0 }
+                            ))
+                            .toggleStyle(.checkbox)
+                            .help("Quiet this device while recording")
                             TextField("Name", text: $endpoint.name, prompt: Text("Name"))
                                 .focused($focused, equals: endpoint.id)
                                 .frame(width: 120)
@@ -48,28 +53,14 @@ struct IntegrationsTab: View {
                     }
                 }
             }
-
-            Picker("Quiet:", selection: $selectedQuietEndpoint) {
-                Text("None").tag("")
-                if !quietEndpoints.isEmpty {
-                    Divider()
-                }
-                ForEach(quietEndpoints) { endpoint in
-                    Text(endpoint.name.isEmpty ? endpoint.url : endpoint.name).tag(endpoint.id.uuidString)
-                }
-            }
-            .fixedSize()
-            .disabled(quietEndpoints.isEmpty)
         }
         .padding()
-        .onChange(of: selectedQuietEndpoint) { _, _ in
-            controller.quietEndpointChanged()
-        }
-        .onChange(of: quietEndpoints) { _, newValue in
+        .onChange(of: quietEndpoints) { oldValue, newValue in
             QuietEndpointStore.save(newValue)
-            if !newValue.contains(where: { $0.id.uuidString == selectedQuietEndpoint }) {
-                selectedQuietEndpoint = ""
-            }
+            // Only when the ticked set changes — not on every keystroke in a name or URL,
+            // which mid-recording would send requests to a half-typed address.
+            let ticked: ([QuietEndpoint]) -> Set<QuietEndpoint.ID> = { Set($0.filter(\.enabled).map(\.id)) }
+            if ticked(oldValue) != ticked(newValue) { controller.quietEndpointsChanged() }
         }
     }
 }

@@ -118,39 +118,25 @@ extension AppDelegate {
         DebugRecordingStore.revealInFinder()
     }
 
-    // "Lower Mac Volume" first, then the devices from Settings → Integrations, if any.
+    // A multi-select list: "Lower Mac Volume", then every device from Settings →
+    // Integrations, each with its own tick.
     func refreshQuietMenu() {
         quietMenu.removeAllItems()
-        let endpoints = QuietEndpointStore.load()
         quietItem.isHidden = false
-        let selected = AppDefaults.selectedQuietEndpoint
 
         let lowerItem = NSMenuItem(title: "Lower Mac Volume", action: #selector(toggleLowerMacVolume(_:)), keyEquivalent: "")
         lowerItem.target = self
         lowerItem.state = AppDefaults.lowerMacVolumeWhileRecording ? .on : .off
         quietMenu.addItem(lowerItem)
+
+        let endpoints = QuietEndpointStore.load()
         guard !endpoints.isEmpty else { return }
         quietMenu.addItem(.separator())
-        let devicesHeader = NSMenuItem(title: "Devices", action: nil, keyEquivalent: "")
-        devicesHeader.isEnabled = false
-        quietMenu.addItem(devicesHeader)
-
-        let none = NSMenuItem(title: "None", action: #selector(selectQuietEndpoint(_:)), keyEquivalent: "")
-        none.target = self
-        none.representedObject = ""
-        none.state = selected.isEmpty ? .on : .off
-        none.indentationLevel = 1
-        quietMenu.addItem(none)
         for endpoint in endpoints {
-            let item = NSMenuItem(
-                title: endpoint.name.isEmpty ? endpoint.url : endpoint.name,
-                action: #selector(selectQuietEndpoint(_:)),
-                keyEquivalent: ""
-            )
+            let item = NSMenuItem(title: endpoint.displayName, action: #selector(toggleQuietEndpoint(_:)), keyEquivalent: "")
             item.target = self
-            item.representedObject = endpoint.id.uuidString
-            item.state = endpoint.id.uuidString == selected ? .on : .off
-            item.indentationLevel = 1
+            item.representedObject = endpoint.id
+            item.state = endpoint.enabled ? .on : .off
             quietMenu.addItem(item)
         }
     }
@@ -159,8 +145,9 @@ extension AppDelegate {
         AppDefaults.lowerMacVolumeWhileRecording.toggle()
     }
 
-    @objc func selectQuietEndpoint(_ sender: NSMenuItem) {
-        AppDefaults.selectedQuietEndpoint = sender.representedObject as? String ?? ""
-        controller.quietEndpointChanged()
+    @objc func toggleQuietEndpoint(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? QuietEndpoint.ID else { return }
+        QuietEndpointStore.setEnabled(sender.state != .on, id: id)
+        controller.quietEndpointsChanged()
     }
 }

@@ -43,8 +43,8 @@ final class RecordingController {
         }
     }
 
-    // Moving rooms mid-recording: un-mute the old device, mute the new one.
-    func quietEndpointChanged() {
+    // A device ticked or unticked mid-recording: mute / un-mute just that one.
+    func quietEndpointsChanged() {
         guard state == .starting || state == .recording else { return }
         roomQuieter.begin()
     }

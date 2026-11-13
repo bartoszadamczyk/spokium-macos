@@ -251,8 +251,8 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `maxRecordingMinutes` | Double | `30` (options 10/20/30/60, 0 = no limit) | GeneralTab, RecordingController auto-stop |
 | `liveTranscription` | Bool | `true` | TranscriptionTab, RecordingController+Live |
 | `autoDetectLanguages` | String (comma-separated codes) | `""` (any) | TranscriptionTab ("Languages I speak"), Transcriber fallback |
-| `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`) | IntegrationsTab, QuietEndpointStore |
-| `selectedQuietEndpoint` | String (endpoint UUID) | `""` (none) | IntegrationsTab, menu "Quiet While Recording", RoomQuieter |
+| `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`, each with `isEnabled` — any number at once) | IntegrationsTab, menu "Quiet While Recording", QuietEndpointStore, RoomQuieter |
+| `selectedQuietEndpoint` | String (endpoint UUID) | `""` | Legacy (1.5.3 single selection); read once by QuietEndpointStore to set `isEnabled` |
 | `coreMLUnusableModels` | [String] (model stems) | `[]` | CoreMLHealth (set after a 10-min Neural Engine load), Model tab Retry |
 | `macVolumeWhileRecording` | Bool (1.5.3 stored `unchanged`/`lower`/`mute`, mapped on read) | `false` | IntegrationsTab, menu "Quiet While Recording", MacVolumeDucker |
 | `macVolumeDuck` | Data (JSON, transient) | absent | MacVolumeDucker: volume to restore; present only while a duck is in effect, repaired at launch |
