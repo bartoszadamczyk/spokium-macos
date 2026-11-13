@@ -178,6 +178,10 @@ final class AudioRecorder {
     var liveSink: LiveSampleSink?
 
 
+    // UID of the device the running recording uses. Device switches compare against
+    // this rather than the stored setting, which Settings has already overwritten.
+    private(set) var activeDeviceUID: String?
+
     var isRunning: Bool { session != nil }
     var currentLevel: Float { levelMeter.level }
 
@@ -211,6 +215,7 @@ final class AudioRecorder {
             try EngineSession.make(fileURL: fileURL, deviceID: selectedDeviceID, flag: flag, meter: meter, liveSink: sink, logger: logger)
         }
         self.session = session
+        activeDeviceUID = device?.uid ?? AudioInputDevice.defaultInputUID()
 
         let startInstant = ContinuousClock.now
         configChangeObserver = NotificationCenter.default.addObserver(
@@ -233,6 +238,7 @@ final class AudioRecorder {
         }
         guard let session else { return nil }
         self.session = nil
+        activeDeviceUID = nil
 
         do {
             try await Self.onEngineQueue(timeout: Self.stopTimeout, discard: { _ in }) { session.teardown() }

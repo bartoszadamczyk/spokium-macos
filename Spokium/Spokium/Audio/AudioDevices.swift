@@ -205,7 +205,7 @@ struct AudioInputDevice: Equatable {
         var value: Unmanaged<CFString>?
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr,
-              let cfString = value?.takeUnretainedValue() else { return nil }
+              let cfString = value?.takeRetainedValue() else { return nil }
         return cfString as String
     }
 }

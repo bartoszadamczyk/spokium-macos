@@ -18,6 +18,8 @@ nonisolated enum DefaultsKey {
     static let playSounds = "playSounds"
     static let snippets = "snippets"
     static let quietEndpoints = "quietEndpoints"
+    // Model stems whose Neural Engine encoder never finished loading on this Mac.
+    static let coreMLUnusableModels = "coreMLUnusableModels"
     static let selectedQuietEndpoint = "selectedQuietEndpoint"
     static let maxRecordingMinutes = "maxRecordingMinutes"
     static let modelPerformance = "modelPerformance"
@@ -97,6 +99,11 @@ nonisolated enum AppDefaults {
     static var selectedModel: String? {
         get { store.string(forKey: DefaultsKey.selectedModel) }
         set { store.set(newValue, forKey: DefaultsKey.selectedModel) }
+    }
+
+    static var coreMLUnusableModels: [String] {
+        get { store.stringArray(forKey: DefaultsKey.coreMLUnusableModels) ?? [] }
+        set { store.set(newValue, forKey: DefaultsKey.coreMLUnusableModels) }
     }
 
     // QuietEndpoint.id as a string; "" = none.

@@ -190,7 +190,9 @@ extension RecordingController {
             onIdle: { [weak self] in
                 guard let self else { return }
                 self.logger.info("Queue idle: state=\(String(describing: self.state), privacy: .public)")
-                guard case .finishing = self.state else { return }
+                // Not during the stop tail: the last words are still being captured and
+                // finishLiveRecording() will finish the session itself.
+                guard case .finishing = self.state, self.stopTailTask == nil else { return }
                 self.finishSession()
             }
         )

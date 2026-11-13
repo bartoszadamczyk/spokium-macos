@@ -56,10 +56,10 @@ extension AppDelegate {
         cancelMenuItem = NSMenuItem(
             title: "Cancel Recording",
             action: #selector(cancelRecording),
-            keyEquivalent: "\u{1b}"
+            keyEquivalent: ""
         )
-        // Displays ⇧⎋ next to the item; the global monitor handles it while the menu is closed.
-        cancelMenuItem.keyEquivalentModifierMask = [.shift]
+        // Shows the chosen cancel shortcut and follows changes to it.
+        cancelMenuItem.setShortcut(for: .cancelRecording)
         cancelMenuItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
         cancelMenuItem.target = self
         cancelMenuItem.isHidden = true

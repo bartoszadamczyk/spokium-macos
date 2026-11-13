@@ -278,6 +278,7 @@ final class ModelManager {
     func deleteCoreML(_ model: WhisperModel) {
         try? FileManager.default.removeItem(at: model.coreMLURL)
         coreMLInstalledNames.remove(model.name)
+        CoreMLHealth.clear(model.localURL)
         NotificationCenter.default.post(name: .coreMLEncoderChanged, object: model.localURL)
     }
 
@@ -449,7 +450,11 @@ final class ModelManager {
             }
 
             do {
-                try WhisperModel.validateFile(at: tempURL, expectedSHA1: model.expectedSHA1)
+                // Hashing 1.6–3 GB on the main actor froze the UI and the hotkey.
+                let expected = model.expectedSHA1
+                try await Task.detached(priority: .userInitiated) {
+                    try WhisperModel.validateFile(at: tempURL, expectedSHA1: expected)
+                }.value
             } catch {
                 try? FileManager.default.removeItem(at: tempURL)
                 throw error

@@ -81,6 +81,11 @@ check_bundle() {
     echo "  version $version (build $build)"
     [ "$id" = "$BUNDLE_ID" ] && pass "bundle id $id" || fail "bundle id is '$id', expected $BUNDLE_ID (Debug build?)"
 
+    # 1.5.0–1.5.2 shipped as "Spokium Dev" because the dev label leaked into Release.
+    local display
+    display=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$plist" 2>/dev/null)
+    [ "$display" = "Spokium" ] && pass "display name Spokium" || fail "display name is '$display', expected Spokium"
+
     [ "$(/usr/libexec/PlistBuddy -c "Print :LSUIElement" "$plist" 2>/dev/null)" = "true" ] \
         && pass "LSUIElement (no Dock icon)" || fail "LSUIElement missing — app would show a Dock icon"
 

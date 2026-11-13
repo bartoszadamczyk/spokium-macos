@@ -82,12 +82,29 @@ nonisolated struct LiveChunker {
         return false
     }
 
+    // Silent for cutting and pause length: not speech *and* not audible. Silero scores
+    // whispering as non-speech, so judging by its flags alone cut whispered speech
+    // mid-word every few seconds and reported each cut as a long pause (a paragraph
+    // break at every seam). The cost: steady noise above audibleRMS blocks pause cuts,
+    // which then fall back to short gaps or the forced cut with overlap.
+    private func isQuiet(_ index: Int) -> Bool {
+        !windowSpeech[index] && !windowLoud[index]
+    }
+
     private var trailingSilentWindows: Int {
-        windowSpeech.reversed().prefix { !$0 }.count
+        var count = 0
+        var index = windowSpeech.count - 1
+        while index >= 0, isQuiet(index) {
+            count += 1
+            index -= 1
+        }
+        return count
     }
 
     private var leadingSilentWindows: Int {
-        windowSpeech.prefix { !$0 }.count
+        var count = 0
+        while count < windowSpeech.count, isQuiet(count) { count += 1 }
+        return count
     }
 
     mutating func append(_ newSamples: [Float]) -> [Chunk] {
@@ -175,7 +192,7 @@ nonisolated struct LiveChunker {
         var best: (mid: Int, length: Int)?
         var runStart: Int?
         for i in from...windowSpeech.count {
-            let silent = i < windowSpeech.count && !windowSpeech[i]
+            let silent = i < windowSpeech.count && isQuiet(i)
             if silent {
                 if runStart == nil { runStart = i }
             } else if let start = runStart {

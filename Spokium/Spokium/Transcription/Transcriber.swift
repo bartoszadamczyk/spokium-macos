@@ -28,6 +28,9 @@ struct TranscriptionResult: Sendable {
     let debugSegments: [DebugSegment]?
     // Populated only when TranscriptionSettings.wordTimestamps is set.
     var words: [TimedWord] = []
+    // Whisper's own time for this call, excluding the model load. 0 when whisper was
+    // skipped (no speech), so callers don't count it in speed stats.
+    var inferenceSeconds: Double = 0
 }
 
 struct DebugSegment: Sendable {
@@ -50,10 +53,21 @@ struct DebugMetadata: Sendable {
     let transcriptionSeconds: Double
 }
 
-enum TranscriberError: Error {
+enum TranscriberError: LocalizedError {
     case modelLoadFailed
     case inferenceFailed(Int32)
     case cancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .modelLoadFailed:
+            "The Whisper model couldn't be loaded. It may be damaged — try deleting and downloading it again in Settings → Model."
+        case .inferenceFailed(let code):
+            "Whisper failed to transcribe the audio (error \(code))."
+        case .cancelled:
+            "Transcription was cancelled."
+        }
+    }
 }
 
 private final class WhisperContext: @unchecked Sendable {
@@ -66,6 +80,13 @@ private final class WhisperContext: @unchecked Sendable {
 // before loading audio. Comparing the two (rather than resetting a Bool at run start)
 // means an abort that lands before the run begins is never lost, and a new run can't
 // un-abort one that's still in flight.
+private nonisolated final class LoadState: Sendable {
+    private let loaded = Atomic<Bool>(false)
+    var isLoaded: Bool { loaded.load(ordering: .acquiring) }
+    func markLoaded() { loaded.store(true, ordering: .releasing) }
+    func markUnloaded() { loaded.store(false, ordering: .releasing) }
+}
+
 private nonisolated final class AbortFlag: Sendable {
     let epoch = Atomic<Int>(0)
     let armed = Atomic<Int>(0)
@@ -78,18 +99,44 @@ actor Transcriber {
     nonisolated private let abortFlag = AbortFlag()
     private var vad: SileroSpeechClassifier?
     private var vadUnavailable = false
+    // Silero flags for the samples of the call in progress; lets segment filtering see
+    // how much speech each segment's time range actually contained.
+    private var currentSpeechFlags: [Bool]?
 
     // whisper.cpp only looks for the Core ML encoder when the context is created, so a
     // transcriber built before the encoder was installed (or removed) is stale.
     nonisolated let usesCoreMLEncoder: Bool
+    // Loads the model without its Core ML encoder even if one is installed: used while
+    // the Neural Engine is still compiling, and for encoders marked unusable.
+    nonisolated let gpuOnly: Bool
+    nonisolated private let loadState = LoadState()
 
     nonisolated var isStale: Bool {
-        FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path) != usesCoreMLEncoder
+        let encoderInstalled = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
+        return gpuOnly ? false : encoderInstalled != usesCoreMLEncoder
     }
 
-    init(modelURL: URL) {
+    nonisolated var isLoaded: Bool { loadState.isLoaded }
+
+    init(modelURL: URL, gpuOnly: Bool = false) {
         self.modelURL = modelURL
-        self.usesCoreMLEncoder = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
+        self.gpuOnly = gpuOnly
+        self.usesCoreMLEncoder = !gpuOnly
+            && FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
+    }
+
+    // whisper.cpp derives the encoder path from the model path string, so the same .bin
+    // opened through a link in a folder without an encoder loads GPU-only.
+    private static func gpuOnlyPath(for modelURL: URL) throws -> String {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("gpu-only", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let link = dir.appendingPathComponent(modelURL.lastPathComponent)
+        if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != modelURL.path {
+            try? fm.removeItem(at: link)
+            try fm.createSymbolicLink(at: link, withDestinationURL: modelURL)
+        }
+        return link.path
     }
 
     nonisolated func abort() {
@@ -120,6 +167,8 @@ actor Transcriber {
         if abortFlag.isAborted { throw TranscriberError.cancelled }
 
         let speech = speechFlags(for: samples)
+        currentSpeechFlags = speech
+        defer { currentSpeechFlags = nil }
         // True silence only: no classified speech *and* nothing audible. Silero alone
         // isn't trusted to drop audio — it scores real whispering as non-speech.
         if let speech, Double(speech.filter { $0 }.count) * Self.vadWindowSeconds < Self.minSpeechSeconds,
@@ -129,6 +178,7 @@ actor Transcriber {
         }
 
         let ctx = try loadedContext()
+        let inferenceStart = ContinuousClock.now
 
         var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
         params.print_realtime = false
@@ -186,6 +236,7 @@ actor Transcriber {
         // persists we keep the retry's text — it's usually mostly right, unlike the
         // segment-level loop which tends to replace real speech wholesale.
         var loopFallbackTriggered = false
+        var collapsePhraseLoop = false
         let segmentLoop = LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx))
         if segmentLoop || LoopDetector.hasRepeatedPhrase(keptSegmentTexts(ctx: ctx).joined(separator: " ")) {
             transcriberLogger.warning("Loop hallucination detected (segmentLoop=\(segmentLoop)); retrying at temperature 0.4")
@@ -194,6 +245,10 @@ actor Transcriber {
             if LoopDetector.hasLoop(segmentTexts: keptSegmentTexts(ctx: ctx)) {
                 transcriberLogger.warning("Loop hallucination persisted after retry; dropping output")
                 loopFallbackTriggered = true
+            } else if LoopDetector.hasRepeatedPhrase(keptSegmentTexts(ctx: ctx).joined(separator: " ")) {
+                // The rest is usually right; only the repetition is noise.
+                transcriberLogger.warning("Repeated phrase persisted after retry; collapsing it")
+                collapsePhraseLoop = true
             }
         }
 
@@ -220,12 +275,17 @@ actor Transcriber {
             language = "unknown"
         }
 
-        let text: String
+        var text: String
         if loopFallbackTriggered {
             text = ""
         } else if settings.paragraphSplitting {
-            let silenceBreaks = speech.map {
-                SilenceDetector.breaks(speech: $0, windowSeconds: Self.vadWindowSeconds, minSilenceDuration: settings.minSilenceDuration)
+            // A pause is not speech *and* not audible — whispering scores as non-speech.
+            let silenceBreaks = speech.map { flags in
+                SilenceDetector.breaks(
+                    speech: zip(flags, Self.audibleFlags(samples)).map { $0 || $1 },
+                    windowSeconds: Self.vadWindowSeconds,
+                    minSilenceDuration: settings.minSilenceDuration
+                )
             } ?? SilenceDetector.breaks(
                 samples: samples,
                 sampleRate: 16000,
@@ -236,12 +296,16 @@ actor Transcriber {
             text = buildPlainText(ctx: ctx)
         }
 
+        if collapsePhraseLoop { text = LoopDetector.collapseRepeats(text) }
+
         let debugSegments: [DebugSegment]? = AppDefaults.debugMode ? collectDebugSegments(ctx: ctx) : nil
 
         var result = TranscriptionResult(text: text, language: language, debugSegments: debugSegments)
         if settings.wordTimestamps, !loopFallbackTriggered {
             result.words = collectWords(ctx: ctx)
         }
+        let (secs, attos) = (ContinuousClock.now - inferenceStart).components
+        result.inferenceSeconds = Double(secs) + Double(attos) * 1e-18
         return result
     }
 
@@ -333,6 +397,7 @@ actor Transcriber {
 
     func unload() {
         context = nil
+        loadState.markUnloaded()
     }
 
     private func collectDebugSegments(ctx: OpaquePointer) -> [DebugSegment] {
@@ -369,8 +434,18 @@ actor Transcriber {
             if drop {
                 // Metadata only. Kept at notice level so a dropped quiet phrase is traceable.
                 transcriberLogger.notice("No-speech filter dropped segment \(i): no_speech=\(String(format: "%.2f", noSpeech), privacy: .public) avg_logprob=\(String(format: "%.2f", logProb ?? .nan), privacy: .public)")
+                return false
             }
-            return !drop
+            if let flags = currentSpeechFlags, let cText = whisper_full_get_segment_text(ctx, i) {
+                let t0 = Double(whisper_full_get_segment_t0(ctx, i)) / 100
+                let t1 = Double(whisper_full_get_segment_t1(ctx, i)) / 100
+                let ratio = HallucinationFilter.speechRatio(flags: flags, windowSeconds: Self.vadWindowSeconds, from: t0, to: t1)
+                if HallucinationFilter.shouldDrop(text: String(cString: cText), speechRatio: ratio) {
+                    transcriberLogger.notice("Stock-phrase filter dropped segment \(i): speech=\(String(format: "%.0f%%", ratio * 100), privacy: .public)")
+                    return false
+                }
+            }
+            return true
         }
     }
 
@@ -428,9 +503,13 @@ actor Transcriber {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func isAudible(_ samples: [Float]) -> Bool {
+    private static func audibleFlags(_ samples: [Float]) -> [Bool] {
         let usable = samples.count / 512 * 512
-        return RMSSpeechClassifier(windowSamples: 512, silenceRMS: RMSSpeechClassifier.audibleRMS).classify(samples[0..<usable]).contains(true)
+        return RMSSpeechClassifier(windowSamples: 512, silenceRMS: RMSSpeechClassifier.audibleRMS).classify(samples[0..<usable])
+    }
+
+    private static func isAudible(_ samples: [Float]) -> Bool {
+        audibleFlags(samples).contains(true)
     }
 
     private static let vadWindowSeconds = 512.0 / 16_000
@@ -464,24 +543,27 @@ actor Transcriber {
         _ = Self.suppressLogs
         let loadStart = ContinuousClock.now
         defer {
-            transcriberLogger.notice("Model loaded: \(self.modelURL.deletingPathExtension().lastPathComponent, privacy: .public) in \(ContinuousClock.now - loadStart, privacy: .public), coreML=\(self.usesCoreMLEncoder)")
+            transcriberLogger.notice("Model loaded: \(self.modelURL.deletingPathExtension().lastPathComponent, privacy: .public) in \(ContinuousClock.now - loadStart, privacy: .public), coreML=\(self.usesCoreMLEncoder), gpuOnly=\(self.gpuOnly)")
         }
 
+        let path = gpuOnly ? try Self.gpuOnlyPath(for: modelURL) : modelURL.path
         var params = whisper_context_default_params()
         params.use_gpu = true
 
-        if let ctx = whisper_init_from_file_with_params(modelURL.path, params) {
+        if let ctx = whisper_init_from_file_with_params(path, params) {
             let wrapped = WhisperContext(pointer: ctx)
             context = wrapped
+            loadState.markLoaded()
             return ctx
         }
 
         params.use_gpu = false
-        guard let ctx = whisper_init_from_file_with_params(modelURL.path, params) else {
+        guard let ctx = whisper_init_from_file_with_params(path, params) else {
             throw TranscriberError.modelLoadFailed
         }
         let wrapped = WhisperContext(pointer: ctx)
         context = wrapped
+        loadState.markLoaded()
         return ctx
     }
 }

@@ -81,6 +81,13 @@ final class RecordingController {
     var currentRecordingURL: URL?
     var pendingAudioSegments: [URL] = []  // accumulated split segments, transcribed as one unit on stop
     var pendingStartCancel = false
+    // A stop that arrived while the mic wasn't running yet (push-to-record released
+    // during .starting) or was being restarted after a device change. Honoured as soon
+    // as recording is live again.
+    var pendingStop = false
+    // Set when the session was stopped with the "stop and send" shortcut: press Return
+    // after the paste.
+    var sendAfterPaste = false
     var isResumingAfterSplit = false
     var stopTailTask: Task<Void, Never>?
     var stopRequestedAt: ContinuousClock.Instant?
@@ -115,6 +122,12 @@ final class RecordingController {
         KeyboardShortcuts.onKeyUp(for: .toggleRecording) { [weak self] in
             self?.handleKeyUp()
         }
+        KeyboardShortcuts.onKeyDown(for: .toggleRecordingAndSend) { [weak self] in
+            self?.handleKeyDown(send: true)
+        }
+        KeyboardShortcuts.onKeyUp(for: .toggleRecordingAndSend) { [weak self] in
+            self?.handleKeyUp(send: true)
+        }
         recorder.onConfigurationChange = { [weak self] in
             self?.handleAudioConfigurationChange()
         }
@@ -148,7 +161,9 @@ final class RecordingController {
         AppDefaults.pushToRecord
     }
 
-    private func handleKeyDown() {
+    // `send`: the "stop and send" shortcut. It starts recordings like the normal one;
+    // only the key that *stops* decides whether Return follows the paste.
+    private func handleKeyDown(send: Bool = false) {
         if isPushToRecord {
             switch state {
             case .idle:
@@ -160,14 +175,23 @@ final class RecordingController {
                 break
             }
         } else {
-            toggle()
+            toggle(send: send)
         }
     }
 
-    private func handleKeyUp() {
+    private func handleKeyUp(send: Bool = false) {
         guard isPushToRecord else { return }
-        if case .recording = state {
+        switch state {
+        case .recording:
+            sendAfterPaste = send
             stop()
+        case .starting:
+            sendAfterPaste = send
+            // The mic takes 100–300 ms to start (1–2 s for Bluetooth); a release in that
+            // window used to be dropped and the recording kept running.
+            pendingStop = true
+        default:
+            break
         }
     }
 
@@ -221,7 +245,7 @@ final class RecordingController {
         return await queue.tokenCount(for: text, modelURL: modelURL)
     }
 
-    func toggle() {
+    func toggle(send: Bool = false) {
         // Rapid start/stop bursts churn AVAudioEngine/aggregate-device setup in coreaudiod
         // and once wedged it (see AudioRecorder). Nobody toggles deliberately this fast.
         let now = ContinuousClock.now
@@ -235,6 +259,7 @@ final class RecordingController {
         case .starting:
             break
         case .recording:
+            sendAfterPaste = send
             stop()
         case .finishing:
             // Keep transcription running in background; start another recording
@@ -246,6 +271,8 @@ final class RecordingController {
         switch state {
         case .starting:
             pendingStartCancel = true
+            pendingStop = false
+            sendAfterPaste = false
             logger.info("Recording start cancellation requested")
         case .recording:
             monitors.stopAll()
@@ -279,13 +306,23 @@ final class RecordingController {
     }
 
     // Transitions out of recording; goes to .finishing if transcriptions are pending, else .idle
-    func returnFromRecording() {
+    // `keepPendingText` is false only for an explicit cancel. A continued session whose
+    // new segment fails to start must still paste the text from its first part.
+    func returnFromRecording(keepPendingText: Bool = true) {
         if queue.queuedCount > 0 {
             state = .finishing
+        } else if keepPendingText, hasPendingText {
+            state = .finishing
+            finishSession()
         } else {
             state = .idle
             monitors.stopEscape()
         }
+    }
+
+    private var hasPendingText: Bool {
+        if isLiveSession { return !(liveAssembler?.text.isEmpty ?? true) }
+        return !sessionTexts.isEmpty
     }
 
     // Per-segment monitors: level meter, auto-stop deadline. Called at the
@@ -297,11 +334,15 @@ final class RecordingController {
             onUpdate: { [weak self] level in
                 self?.inputLevel = level
             },
-            onSilenceDetected: { [weak self] in
+            onSilenceDetected: { [weak self] heardAudioBefore in
                 guard let self else { return }
-                self.logger.warning("No audio detected for 5s — surfacing dead-mic warning")
+                self.logger.warning("No audio detected for 5s (heard audio before: \(heardAudioBefore)) — surfacing dead-mic warning")
                 self.noAudioWarning = true
-                RecordingSounds.playWarning()
+                // Only a mic that never produced audio gets the chime. After a pause
+                // mid-recording the chime would be picked up and transcribed.
+                if !heardAudioBefore {
+                    RecordingSounds.playWarning()
+                }
             },
             onAudioResumed: { [weak self] in
                 guard let self else { return }
@@ -354,7 +395,10 @@ final class RecordingController {
     func makeTempURL() -> URL {
         let timestamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
+        // The suffix keeps two recordings started within the same second apart: a
+        // cancelled one's async delete could otherwise remove the new file.
+        let suffix = UUID().uuidString.prefix(8)
         return FileManager.default.temporaryDirectory
-            .appendingPathComponent("whisper-\(timestamp).caf")
+            .appendingPathComponent("whisper-\(timestamp)-\(suffix).caf")
     }
 }

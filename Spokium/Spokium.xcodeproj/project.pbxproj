@@ -7,29 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		98C9503A2FAFEC890018AD75 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 98C950392FAFEC890018AD75 /* KeyboardShortcuts */; };
-		98C9503D2FAFED230018AD75 /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98C9503B2FAFED120018AD75 /* whisper.xcframework */; };
-		98C9503E2FAFED230018AD75 /* whisper.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 98C9503B2FAFED120018AD75 /* whisper.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B8E0F08BC867AB3A9E88823E /* whisper.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 643F98A3EA97C827E450A3A1 /* whisper.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		BC762B9404E4925AF073730C /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 6A1812892103146FF2C6CC3E /* KeyboardShortcuts */; };
+		D2CBE6B3A595CEC2CC694753 /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 643F98A3EA97C827E450A3A1 /* whisper.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		981E84592FCA46B300AF1975 /* PBXContainerItemProxy */ = {
+		1F263D0024E7DA839FCA2DB4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 9855A2DA2FAFE6BB003A6A5D /* Project object */;
+			containerPortal = 79758C5E624D4CE139A69FC0 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 9855A2E12FAFE6BB003A6A5D;
+			remoteGlobalIDString = 7FD1930BE5A5868D6159DFA3;
 			remoteInfo = Spokium;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		98C9503F2FAFED230018AD75 /* Embed Frameworks */ = {
+		9C13DCB589B76731CD6559A9 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				98C9503E2FAFED230018AD75 /* whisper.xcframework in Embed Frameworks */,
+				B8E0F08BC867AB3A9E88823E /* whisper.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -37,204 +37,216 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		13DF20CAF9BB5C2BF926A0CF /* APP_REVIEW_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = APP_REVIEW_IDEAS.md; path = ../APP_REVIEW_IDEAS.md; sourceTree = "<group>"; };
-		28E4AD8BDA69DCE8AEA6D60B /* DEV.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = DEV.md; path = ../DEV.md; sourceTree = "<group>"; };
-		34BE5C336C5E01C71F646C10 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = SECURITY.md; path = ../SECURITY.md; sourceTree = "<group>"; };
-		447C31C863FD70069F925D46 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = AGENTS.md; path = ../AGENTS.md; sourceTree = "<group>"; };
-		981E84552FCA46B300AF1975 /* SpokiumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpokiumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		9855A2E22FAFE6BB003A6A5D /* Spokium.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spokium.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		98C9503B2FAFED120018AD75 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
-		B2F24B9D720E7C0E5326507D /* plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = plan.md; path = ../plan.md; sourceTree = "<group>"; };
-		C11BC2818A68C63B37F9C1D4 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
-		DD033029DE0F5769BF50CB37 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE.txt; path = ../LICENSE.txt; sourceTree = "<group>"; };
-		DDD447247B54344E22A0D454 /* REJECTED_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = REJECTED_IDEAS.md; path = ../REJECTED_IDEAS.md; sourceTree = "<group>"; };
-		F9E9308EE3C7381D5C4B0BA9 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
+		01976699903249CB70848807 /* plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = plan.md; path = ../plan.md; sourceTree = "<group>"; };
+		18D51CCCCDC57759F821FCA8 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
+		25656A43ED2D9B08235BC27E /* APP_REVIEW_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = APP_REVIEW_IDEAS.md; path = ../APP_REVIEW_IDEAS.md; sourceTree = "<group>"; };
+		477215DDE916665FC8AF4088 /* DEV.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = DEV.md; path = ../DEV.md; sourceTree = "<group>"; };
+		643F98A3EA97C827E450A3A1 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
+		700288AB031EEBD8BD571D83 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = AGENTS.md; path = ../AGENTS.md; sourceTree = "<group>"; };
+		8A67FBB0A349B37117D8FBC8 /* SpokiumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpokiumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1AEF717407442BF72A4753F /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		C368FDED9D3E25D0B3598A42 /* project.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = project.yml; sourceTree = "<group>"; };
+		C66CDA3C8321AE4A8A3E8923 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
+		C7C706D3770372660B806F0B /* Spokium Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Spokium Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D07A98CA69117A9ABFBB8B57 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE.txt; path = ../LICENSE.txt; sourceTree = "<group>"; };
+		E8CD8478E68759557B628D3D /* REJECTED_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = REJECTED_IDEAS.md; path = ../REJECTED_IDEAS.md; sourceTree = "<group>"; };
+		FC2CF0176720EC4ABDE88986 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = SECURITY.md; path = ../SECURITY.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		98B9F43130A015F10051B2D7 /* Exceptions for "Spokium" folder in "Spokium" target */ = {
+		9BB409ADA4927B76920E7A86 /* Exceptions for "Spokium" folder in "Spokium" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 9855A2E12FAFE6BB003A6A5D /* Spokium */;
+			target = 7FD1930BE5A5868D6159DFA3 /* Spokium */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		981E84562FCA46B300AF1975 /* SpokiumTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SpokiumTests;
-			sourceTree = "<group>";
-		};
-		9855A2E42FAFE6BB003A6A5D /* Spokium */ = {
+		36BFBF697C13F7BA30A195D0 /* Spokium */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				98B9F43130A015F10051B2D7 /* Exceptions for "Spokium" folder in "Spokium" target */,
+				9BB409ADA4927B76920E7A86 /* Exceptions for "Spokium" folder in "Spokium" target */,
 			);
 			path = Spokium;
+			sourceTree = "<group>";
+		};
+		613AB0D11FF062798AE31F69 /* SpokiumTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SpokiumTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		981E84522FCA46B300AF1975 /* Frameworks */ = {
+		2A9ECC85FCE0AA0517F341ED /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		9855A2DF2FAFE6BB003A6A5D /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				98C9503D2FAFED230018AD75 /* whisper.xcframework in Frameworks */,
-				98C9503A2FAFEC890018AD75 /* KeyboardShortcuts in Frameworks */,
+				D2CBE6B3A595CEC2CC694753 /* whisper.xcframework in Frameworks */,
+				BC762B9404E4925AF073730C /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		04F4F22F7F4ACF54BAC4B3B8 /* Docs */ = {
+		2317C53B3554471D10578647 /* Docs */ = {
 			isa = PBXGroup;
 			children = (
-				C11BC2818A68C63B37F9C1D4 /* README.md */,
-				447C31C863FD70069F925D46 /* AGENTS.md */,
-				28E4AD8BDA69DCE8AEA6D60B /* DEV.md */,
-				B2F24B9D720E7C0E5326507D /* plan.md */,
-				13DF20CAF9BB5C2BF926A0CF /* APP_REVIEW_IDEAS.md */,
-				DD033029DE0F5769BF50CB37 /* LICENSE.txt */,
-				DDD447247B54344E22A0D454 /* REJECTED_IDEAS.md */,
-				34BE5C336C5E01C71F646C10 /* SECURITY.md */,
-				F9E9308EE3C7381D5C4B0BA9 /* THIRD_PARTY_NOTICES.md */,
+				700288AB031EEBD8BD571D83 /* AGENTS.md */,
+				25656A43ED2D9B08235BC27E /* APP_REVIEW_IDEAS.md */,
+				477215DDE916665FC8AF4088 /* DEV.md */,
+				D07A98CA69117A9ABFBB8B57 /* LICENSE.txt */,
+				01976699903249CB70848807 /* plan.md */,
+				C368FDED9D3E25D0B3598A42 /* project.yml */,
+				C66CDA3C8321AE4A8A3E8923 /* README.md */,
+				E8CD8478E68759557B628D3D /* REJECTED_IDEAS.md */,
+				FC2CF0176720EC4ABDE88986 /* SECURITY.md */,
+				18D51CCCCDC57759F821FCA8 /* THIRD_PARTY_NOTICES.md */,
 			);
 			name = Docs;
 			sourceTree = "<group>";
 		};
-		9855A2D92FAFE6BB003A6A5D = {
+		2CB077D976F9B89213B693C6 = {
 			isa = PBXGroup;
 			children = (
-				04F4F22F7F4ACF54BAC4B3B8 /* Docs */,
-				9855A2E42FAFE6BB003A6A5D /* Spokium */,
-				981E84562FCA46B300AF1975 /* SpokiumTests */,
-				9855A2E32FAFE6BB003A6A5D /* Products */,
-				98C9503B2FAFED120018AD75 /* whisper.xcframework */,
+				2317C53B3554471D10578647 /* Docs */,
+				36BFBF697C13F7BA30A195D0 /* Spokium */,
+				7F30057B70694DFD484A56F0 /* Spokium */,
+				613AB0D11FF062798AE31F69 /* SpokiumTests */,
+				B983D305757CE207C3B1F807 /* Frameworks */,
+				6181748DE0D204F2C7064E14 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		9855A2E32FAFE6BB003A6A5D /* Products */ = {
+		6181748DE0D204F2C7064E14 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9855A2E22FAFE6BB003A6A5D /* Spokium.app */,
-				981E84552FCA46B300AF1975 /* SpokiumTests.xctest */,
+				C7C706D3770372660B806F0B /* Spokium Dev.app */,
+				8A67FBB0A349B37117D8FBC8 /* SpokiumTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7F30057B70694DFD484A56F0 /* Spokium */ = {
+			isa = PBXGroup;
+			children = (
+				A1AEF717407442BF72A4753F /* Version.xcconfig */,
+			);
+			name = Spokium;
+			path = .;
+			sourceTree = "<group>";
+		};
+		B983D305757CE207C3B1F807 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				643F98A3EA97C827E450A3A1 /* whisper.xcframework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		981E84542FCA46B300AF1975 /* SpokiumTests */ = {
+		3D2EA787D4FA46E530640869 /* SpokiumTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 981E845B2FCA46B300AF1975 /* Build configuration list for PBXNativeTarget "SpokiumTests" */;
+			buildConfigurationList = 082EB46F6B2277BF12C81086 /* Build configuration list for PBXNativeTarget "SpokiumTests" */;
 			buildPhases = (
-				981E84512FCA46B300AF1975 /* Sources */,
-				981E84522FCA46B300AF1975 /* Frameworks */,
-				981E84532FCA46B300AF1975 /* Resources */,
+				4E19CF1E347C854B23B0A1A7 /* Sources */,
+				B788731AF532C621A2CEFC64 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				981E845A2FCA46B300AF1975 /* PBXTargetDependency */,
+				CF93442C8B4C0EEE330E791E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				981E84562FCA46B300AF1975 /* SpokiumTests */,
+				613AB0D11FF062798AE31F69 /* SpokiumTests */,
 			);
 			name = SpokiumTests;
 			packageProductDependencies = (
 			);
 			productName = SpokiumTests;
-			productReference = 981E84552FCA46B300AF1975 /* SpokiumTests.xctest */;
+			productReference = 8A67FBB0A349B37117D8FBC8 /* SpokiumTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		9855A2E12FAFE6BB003A6A5D /* Spokium */ = {
+		7FD1930BE5A5868D6159DFA3 /* Spokium */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 9855A2ED2FAFE6BC003A6A5D /* Build configuration list for PBXNativeTarget "Spokium" */;
+			buildConfigurationList = C03B05827A34C6313DFF4512 /* Build configuration list for PBXNativeTarget "Spokium" */;
 			buildPhases = (
-				9855A2DE2FAFE6BB003A6A5D /* Sources */,
-				9855A2DF2FAFE6BB003A6A5D /* Frameworks */,
-				9855A2E02FAFE6BB003A6A5D /* Resources */,
-				98C9503F2FAFED230018AD75 /* Embed Frameworks */,
-				981E831A2FC9034000AF1975 /* Bump build number on archive */,
+				78A9A409AEA0AA18645FC051 /* Sources */,
+				E4BD66282B68FA213E2F0B9A /* Resources */,
+				2A9ECC85FCE0AA0517F341ED /* Frameworks */,
+				9C13DCB589B76731CD6559A9 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				9855A2E42FAFE6BB003A6A5D /* Spokium */,
+				36BFBF697C13F7BA30A195D0 /* Spokium */,
 			);
 			name = Spokium;
 			packageProductDependencies = (
-				98C950392FAFEC890018AD75 /* KeyboardShortcuts */,
+				6A1812892103146FF2C6CC3E /* KeyboardShortcuts */,
 			);
 			productName = Spokium;
-			productReference = 9855A2E22FAFE6BB003A6A5D /* Spokium.app */;
+			productReference = C7C706D3770372660B806F0B /* Spokium Dev.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		9855A2DA2FAFE6BB003A6A5D /* Project object */ = {
+		79758C5E624D4CE139A69FC0 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2650;
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					981E84542FCA46B300AF1975 = {
-						CreatedOnToolsVersion = 26.5;
-						TestTargetID = 9855A2E12FAFE6BB003A6A5D;
+					3D2EA787D4FA46E530640869 = {
+						DevelopmentTeam = 6J9C6FCCS5;
+						ProvisioningStyle = Automatic;
 					};
-					9855A2E12FAFE6BB003A6A5D = {
-						CreatedOnToolsVersion = 26.4.1;
+					7FD1930BE5A5868D6159DFA3 = {
+						DevelopmentTeam = 6J9C6FCCS5;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
-			buildConfigurationList = 9855A2DD2FAFE6BB003A6A5D /* Build configuration list for PBXProject "Spokium" */;
+			buildConfigurationList = 346515EB2A262A6FB599EF95 /* Build configuration list for PBXProject "Spokium" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
 				Base,
+				en,
 			);
-			mainGroup = 9855A2D92FAFE6BB003A6A5D;
+			mainGroup = 2CB077D976F9B89213B693C6;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				98C950382FAFEC890018AD75 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				8EDF19DC97878CD6E2F41EB5 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 9855A2E32FAFE6BB003A6A5D /* Products */;
+			productRefGroup = 6181748DE0D204F2C7064E14 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				9855A2E12FAFE6BB003A6A5D /* Spokium */,
-				981E84542FCA46B300AF1975 /* SpokiumTests */,
+				7FD1930BE5A5868D6159DFA3 /* Spokium */,
+				3D2EA787D4FA46E530640869 /* SpokiumTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		981E84532FCA46B300AF1975 /* Resources */ = {
+		B788731AF532C621A2CEFC64 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		9855A2E02FAFE6BB003A6A5D /* Resources */ = {
+		E4BD66282B68FA213E2F0B9A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -243,37 +255,15 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		981E831A2FC9034000AF1975 /* Bump build number on archive */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 8;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Bump build number on archive";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-			shellPath = /bin/sh;
-			shellScript = "set -e\ncd \"$SRCROOT\"\n\n/usr/bin/xcrun agvtool next-version -all\n\nNEW_BUILD=$(/usr/bin/xcrun agvtool what-version -terse)\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $NEW_BUILD\" \\\n    \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\necho \"Bumped build to $NEW_BUILD\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
-		981E84512FCA46B300AF1975 /* Sources */ = {
+		4E19CF1E347C854B23B0A1A7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		9855A2DE2FAFE6BB003A6A5D /* Sources */ = {
+		78A9A409AEA0AA18645FC051 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -283,58 +273,77 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		981E845A2FCA46B300AF1975 /* PBXTargetDependency */ = {
+		CF93442C8B4C0EEE330E791E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 9855A2E12FAFE6BB003A6A5D /* Spokium */;
-			targetProxy = 981E84592FCA46B300AF1975 /* PBXContainerItemProxy */;
+			target = 7FD1930BE5A5868D6159DFA3 /* Spokium */;
+			targetProxy = 1F263D0024E7DA839FCA2DB4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		981E845C2FCA46B300AF1975 /* Debug */ = {
+		0A825CBB0A613CEB1A642D6D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1AEF717407442BF72A4753F /* Version.xcconfig */;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 33;
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 6J9C6FCCS5;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium";
-			};
-			name = Debug;
-		};
-		981E845D2FCA46B300AF1975 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 33;
-				DEVELOPMENT_TEAM = 6J9C6FCCS5;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.3;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
-		9855A2EB2FAFE6BC003A6A5D /* Debug */ = {
+		11310869E36A738CD1D05ED7 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1AEF717407442BF72A4753F /* Version.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -400,66 +409,7 @@
 			};
 			name = Debug;
 		};
-		9855A2EC2FAFE6BC003A6A5D /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 6J9C6FCCS5;
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				VERSIONING_SYSTEM = "apple-generic";
-			};
-			name = Release;
-		};
-		9855A2EE2FAFE6BC003A6A5D /* Debug */ = {
+		5AD29F0FE4297DC9BD8E5A72 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -468,7 +418,6 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 33;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -485,9 +434,13 @@
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Frameworks\"",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Spokium/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Spokium Dev";
+				INFOPLIST_KEY_CFBundleDisplayName = Spokium;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -498,65 +451,6 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.dev;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
-				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
-				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
-				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
-		};
-		9855A2EF2FAFE6BC003A6A5D /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				AUTOMATION_APPLE_EVENTS = NO;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 33;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Spokium/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Spokium Dev";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spokium contacts the devices you add under “Quiet while recording” to mute them while you dictate.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spokium records audio to transcribe your dictation locally.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.3;
-				MARKETING_VERSION = 1.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -575,40 +469,135 @@
 			};
 			name = Release;
 		};
+		CC6C5F4399EC552155A9B1C7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				AUTOMATION_APPLE_EVENTS = NO;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Frameworks\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Spokium/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Spokium Dev";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Spokium contacts the devices you add under “Quiet while recording” to mute them while you dictate.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Spokium records audio to transcribe your dictation locally.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.3;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.dev;
+				PRODUCT_MODULE_NAME = Spokium;
+				PRODUCT_NAME = "Spokium Dev";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		DA03C2238AEA209574D4CF69 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium Dev.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium Dev";
+			};
+			name = Debug;
+		};
+		E0C4DD6C0CA75C9803F84134 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.spokium.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Spokium.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Spokium";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		981E845B2FCA46B300AF1975 /* Build configuration list for PBXNativeTarget "SpokiumTests" */ = {
+		082EB46F6B2277BF12C81086 /* Build configuration list for PBXNativeTarget "SpokiumTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				981E845C2FCA46B300AF1975 /* Debug */,
-				981E845D2FCA46B300AF1975 /* Release */,
+				DA03C2238AEA209574D4CF69 /* Debug */,
+				E0C4DD6C0CA75C9803F84134 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		9855A2DD2FAFE6BB003A6A5D /* Build configuration list for PBXProject "Spokium" */ = {
+		346515EB2A262A6FB599EF95 /* Build configuration list for PBXProject "Spokium" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				9855A2EB2FAFE6BC003A6A5D /* Debug */,
-				9855A2EC2FAFE6BC003A6A5D /* Release */,
+				11310869E36A738CD1D05ED7 /* Debug */,
+				0A825CBB0A613CEB1A642D6D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		9855A2ED2FAFE6BC003A6A5D /* Build configuration list for PBXNativeTarget "Spokium" */ = {
+		C03B05827A34C6313DFF4512 /* Build configuration list for PBXNativeTarget "Spokium" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				9855A2EE2FAFE6BC003A6A5D /* Debug */,
-				9855A2EF2FAFE6BC003A6A5D /* Release */,
+				CC6C5F4399EC552155A9B1C7 /* Debug */,
+				5AD29F0FE4297DC9BD8E5A72 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		98C950382FAFEC890018AD75 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+		8EDF19DC97878CD6E2F41EB5 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
 			requirement = {
@@ -619,12 +608,12 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		98C950392FAFEC890018AD75 /* KeyboardShortcuts */ = {
+		6A1812892103146FF2C6CC3E /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 98C950382FAFEC890018AD75 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			package = 8EDF19DC97878CD6E2F41EB5 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 9855A2DA2FAFE6BB003A6A5D /* Project object */;
+	rootObject = 79758C5E624D4CE139A69FC0 /* Project object */;
 }

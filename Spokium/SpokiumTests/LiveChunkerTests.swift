@@ -155,4 +155,34 @@ struct LiveChunkerTests {
         let duration = chunk?.duration ?? 0
         #expect(duration >= 2 && duration < 3.1)
     }
+
+    // Review 2026-11, finding 4: audible audio the VAD scores as non-speech (real
+    // whispering) was cut every ~5 s with no overlap and reported as a 15 s pause.
+    @Test
+    func continuousWhisper_isNotCutAsPauses_norReportedAsParagraphs() {
+        var config = LiveChunker.Config()
+        config.minSpeechSeconds = 0.25
+        var chunker = LiveChunker(config: config, classifier: DeafClassifier())
+        let whisper = speech(40).map { $0 * 0.08 }  // RMS 0.008: audible, "not speech"
+        let chunks = chunker.append(whisper)
+        #expect(chunks.count == 1)
+        #expect(chunks.first?.trailingOverlap == 2)
+        #expect(abs((chunks.first?.duration ?? 0) - 28) < 0.1)
+        let last = chunker.flush()
+        #expect(last?.leadingOverlap == 2)
+        #expect((chunks + [last].compactMap { $0 }).allSatisfy { $0.pauseBefore == 0 })
+    }
+
+    @Test
+    func whisperWithARealPause_stillCutsAtThePause() {
+        var config = LiveChunker.Config()
+        config.minSpeechSeconds = 0.25
+        var chunker = LiveChunker(config: config, classifier: DeafClassifier())
+        let whisper: (Double) -> [Float] = { self.speech($0).map { $0 * 0.08 } }
+        let chunks = chunker.append(whisper(12) + silence(1) + whisper(3))
+        #expect(chunks.count == 1)
+        #expect(chunks.first?.trailingOverlap == 0)
+        let duration = chunks.first?.duration ?? 0
+        #expect(duration > 12 && duration < 13)
+    }
 }

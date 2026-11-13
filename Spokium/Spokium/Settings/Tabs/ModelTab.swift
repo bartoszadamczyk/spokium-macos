@@ -223,8 +223,34 @@ struct CoreMLEncoderRow: View {
     let model: WhisperModel
     @Bindable var manager: ModelManager
     @Environment(RecordingController.self) private var controller
+    @State private var unusable = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            encoderRow
+            if unusable, manager.coreMLInstalledNames.contains(model.name) {
+                HStack(spacing: 6) {
+                    Text("Didn't finish preparing on this Mac — using the GPU instead.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Retry") {
+                        CoreMLHealth.clear(model.localURL)
+                        NotificationCenter.default.post(name: .coreMLEncoderChanged, object: model.localURL)
+                    }
+                    .controlSize(.small)
+                    .help("Try the Neural Engine again. Dictation keeps using the GPU until it's ready.")
+                }
+            }
+        }
+        .task {
+            unusable = CoreMLHealth.isUnusable(model.localURL)
+            for await _ in NotificationCenter.default.notifications(named: .coreMLHealthChanged) {
+                unusable = CoreMLHealth.isUnusable(model.localURL)
+            }
+        }
+    }
+
+    private var encoderRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "cpu")
                 .font(.caption)
@@ -266,7 +292,7 @@ struct CoreMLEncoderRow: View {
                 .controlSize(.small)
             }
         }
-        .help("Runs whisper's encoder on the Apple Neural Engine via Core ML. Usually faster on M1/M2-class GPUs and lighter on battery. The first use after installing compiles it for your Mac, which can take a few minutes once.")
+        .help("Runs whisper's encoder on the Apple Neural Engine via Core ML. Usually faster on M1/M2-class GPUs and lighter on battery. The first use after installing compiles it for your Mac, which can take a few minutes once; dictation runs on the GPU until it's ready. If it isn't ready within 10 minutes, Spokium stops using it on this Mac.")
     }
 }
 

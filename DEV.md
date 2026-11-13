@@ -11,8 +11,8 @@ Only the **Debug** build configuration differs. Release is unchanged.
 | Built by | Product → Archive (Release), or installed from a GitHub release | ⌘R in Xcode (Debug) |
 | Bundle ID | `com.spokium.mac` | `com.spokium.mac.dev` |
 | Display name | Spokium | Spokium Dev |
-| Default hotkey | ⌥Space | ⌃⌥Space (`#if DEBUG` in `Hotkey/HotkeyName.swift`) |
-| Location | `/Applications/Spokium.app` | Xcode DerivedData |
+| Default hotkeys | ⌘; record, ⇧⌘; stop and send | ⌃⌘; and ⌃⇧⌘; (`#if DEBUG` in `Hotkey/HotkeyName.swift`) |
+| Location | `/Applications/Spokium.app` | Xcode DerivedData, as `Spokium Dev.app` (process `Spokium Dev`) |
 
 ## What's separate
 
@@ -47,10 +47,14 @@ Debug recordings for the dev build land in `~/Library/Containers/com.spokium.mac
 
 - **Telling them apart.** In Debug builds the menu bar icon has a small "DEV" label (`MenuBarIcon`), and the Settings window has an orange "DEV BUILD · com.spokium.mac.dev" strip (`DevBuildBanner` in `SettingsView.swift`).
 - **Profiling uses the production identity.** The scheme's Profile action (⌘I, Instruments) builds **Release**, so it runs as `com.spokium.mac` with your real settings and models. Switch Profile to Debug in the scheme, or add a dedicated configuration, if that matters.
-- **Granting Accessibility to the dev build.** The dev build may not prompt, and both builds show up as "Spokium" in the list. What works: System Settings → Privacy & Security → Accessibility → **+** → ⌘⇧G → `~/Library/Developer/Xcode/DerivedData/Spokium-*/Build/Products/Debug/Spokium.app` → enable it. Toggling an existing row may silently revert if that row belongs to a different signature of the same bundle ID (e.g. an Xcode archive of `com.spokium.mac` vs. the Developer ID build in `/Applications`). If it gets confused: `tccutil reset Accessibility com.spokium.mac.dev` and add it again.
+- **Granting Accessibility to the dev build.** The dev build may not prompt, and in builds before 1.5.3 both showed up as "Spokium" in the list (the dev one is now `Spokium Dev.app`). What works: System Settings → Privacy & Security → Accessibility → **+** → ⌘⇧G → `~/Library/Developer/Xcode/DerivedData/Spokium-*/Build/Products/Debug/Spokium Dev.app` → enable it. Toggling an existing row may silently revert if that row belongs to a different signature of the same bundle ID (e.g. an Xcode archive of `com.spokium.mac` vs. the Developer ID build in `/Applications`). If it gets confused: `tccutil reset Accessibility com.spokium.mac.dev` and add it again.
 - **Accessibility can reset after rebuilds.** TCC remembers the permission by code signature. With the same Apple Development certificate it usually persists. If paste stops working in the dev build, turn "Spokium Dev" off and on again under Accessibility.
 - **Hotkeys must differ.** Only one app can register a given Carbon hotkey; the second silently gets nothing. Keep the two shortcuts different if you change either.
 - **Both builds record and paste.** Only the app whose hotkey you pressed is listening, so they don't conflict, but make sure you know which one you triggered.
+
+## Project file (XcodeGen)
+
+The Xcode project is generated from `Spokium/project.yml` (`brew install xcodegen`, then `cd Spokium && xcodegen generate`). Change build settings, capabilities, Info.plist keys, packages or schemes there, never in Xcode's UI. Version numbers are in `Spokium/Version.xcconfig`. New Swift files don't need a regenerate — the source folders are synced.
 
 ## Pre-release checks
 

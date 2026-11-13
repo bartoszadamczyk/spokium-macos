@@ -34,6 +34,11 @@ final class TranscriptionQueue {
     private var lastTask: Task<Void, Never>?
     private var activeTasks: [UUID: Task<Void, Never>] = [:]
     private var transcriber: Transcriber?
+    // GPU-only twin of `transcriber`, used while its Neural Engine encoder is still
+    // loading (the first load compiles it, which can take minutes or, on some Macs,
+    // never finish). Dropped once the Neural Engine is ready.
+    private var gpuFallback: Transcriber?
+    private weak var coreMLLoadWatched: Transcriber?
     // Bumped by cancelAll(). A run that was already in flight when the queue was
     // cancelled still executes its defer; without this it would decrement the freshly
     // zeroed counters to -1 and the next session would never reach onIdle.
@@ -129,9 +134,7 @@ final class TranscriptionQueue {
 
         guard !Task.isCancelled else { return }
 
-        if transcriber?.modelURL != modelURL || transcriber?.isStale == true { transcriber = nil }
-        let transcriber = self.transcriber ?? Transcriber(modelURL: modelURL)
-        self.transcriber = transcriber
+        let transcriber = transcriberForRun(modelURL: modelURL)
         let abortToken = transcriber.abortToken()
         let runSettings = settings()
 
@@ -185,10 +188,12 @@ final class TranscriptionQueue {
             let (tsec, tatto) = transcriptionDuration.components
             let transcribeSeconds = Double(tsec) + Double(tatto) * 1e-18
             LanguageUsageStore.record(language: result.language, characters: result.text.count)
+            // Whisper's own time, not including a model load (which once waited minutes
+            // for a Neural Engine compile); VAD-skipped calls report 0 and are ignored.
             ModelPerformanceStore.record(
                 modelStem: ModelPerformanceStore.key(modelStem: modelStem, coreML: transcriber.usesCoreMLEncoder),
                 audioSeconds: totalAudioSeconds,
-                transcribeSeconds: transcribeSeconds
+                transcribeSeconds: result.inferenceSeconds
             )
 
             let (rsec, ratto) = recordingDuration.components
@@ -216,11 +221,13 @@ final class TranscriptionQueue {
     // an unload() that follows will serialise after the in-flight transcribe() exits.
     func abort() {
         transcriber?.abort()
+        gpuFallback?.abort()
     }
 
     // Tears down all queue state. Used for cancel-all and as part of cleanup().
     func cancelAll() {
         transcriber?.abort()
+        gpuFallback?.abort()
         for task in activeTasks.values { task.cancel() }
         activeTasks = [:]
         generation += 1
@@ -231,29 +238,88 @@ final class TranscriptionQueue {
     }
 
     func tokenCount(for text: String, modelURL: URL) async -> Int? {
-        if let transcriber, transcriber.modelURL == modelURL {
+        // Counting tokens needs no encoder; don't queue behind a Neural Engine compile.
+        if let transcriber, transcriber.modelURL == modelURL, !transcriber.usesCoreMLEncoder || transcriber.isLoaded {
             return try? await transcriber.tokenCount(for: text)
+        }
+        if let gpuFallback, gpuFallback.modelURL == modelURL {
+            return try? await gpuFallback.tokenCount(for: text)
         }
         // Don't swap out the shared transcriber while a run is using it — abort() and
         // unload() would then target the wrong instance. Use a throwaway one instead.
-        let fresh = Transcriber(modelURL: modelURL)
-        if pendingCount == 0 { self.transcriber = fresh }
+        let fresh = Transcriber(modelURL: modelURL, gpuOnly: true)
         return try? await fresh.tokenCount(for: text)
     }
 
     // Starts loading the model in the background. Skipped if a different model's
     // transcriber is mid-run — swapping it out would break abort()/unload() for that run.
     func warmUp(modelURL: URL) {
-        if transcriber?.modelURL != modelURL || transcriber?.isStale == true {
+        if needsNewTranscriber(for: modelURL) {
             guard pendingCount == 0 else { return }
-            transcriber = Transcriber(modelURL: modelURL)
+            transcriber = makeTranscriber(modelURL: modelURL)
         }
         guard let transcriber else { return }
-        Task { await transcriber.warmUp() }
+        if transcriber.usesCoreMLEncoder {
+            startCoreMLLoad(transcriber)
+        } else {
+            Task { await transcriber.warmUp() }
+        }
     }
 
     func unload() async {
+        let fallback = gpuFallback
+        gpuFallback = nil
+        await fallback?.unload()
         await transcriber?.unload()
         transcriber = nil
+    }
+
+    private func needsNewTranscriber(for modelURL: URL) -> Bool {
+        guard let transcriber, transcriber.modelURL == modelURL, !transcriber.isStale else { return true }
+        // Marked unusable, or the mark was cleared (Retry in Settings).
+        let encoderInstalled = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
+        return encoderInstalled && transcriber.gpuOnly != CoreMLHealth.isUnusable(modelURL)
+    }
+
+    private func makeTranscriber(modelURL: URL) -> Transcriber {
+        Transcriber(modelURL: modelURL, gpuOnly: CoreMLHealth.isUnusable(modelURL))
+    }
+
+    // Never make a dictation wait for a Neural Engine load: until it's done, run on the
+    // GPU-only twin. Runs are serial, so nothing else is using either instance here.
+    private func transcriberForRun(modelURL: URL) -> Transcriber {
+        if needsNewTranscriber(for: modelURL) { transcriber = makeTranscriber(modelURL: modelURL) }
+        guard let main = transcriber else { return makeTranscriber(modelURL: modelURL) }
+        guard main.usesCoreMLEncoder, !main.isLoaded else {
+            gpuFallback = nil
+            return main
+        }
+        startCoreMLLoad(main)
+        if gpuFallback?.modelURL != modelURL {
+            gpuFallback = Transcriber(modelURL: modelURL, gpuOnly: true)
+        }
+        logger.info("Neural Engine encoder still loading — transcribing on the GPU meanwhile")
+        return gpuFallback ?? main
+    }
+
+    // Starts the (possibly very long) Core ML load once, and marks the encoder unusable
+    // if it hasn't finished within CoreMLHealth.loadLimit.
+    private func startCoreMLLoad(_ main: Transcriber) {
+        guard coreMLLoadWatched !== main, !main.isLoaded else { return }
+        coreMLLoadWatched = main
+        let modelURL = main.modelURL
+        let logger = logger
+        Task {
+            await main.warmUp()
+            if main.isLoaded {
+                logger.notice("Neural Engine encoder ready for \(CoreMLHealth.stem(of: modelURL), privacy: .public)")
+            }
+        }
+        Task { [weak self, weak main] in
+            try? await Task.sleep(for: CoreMLHealth.loadLimit)
+            guard let main, !main.isLoaded, self?.transcriber === main else { return }
+            logger.error("Neural Engine encoder for \(CoreMLHealth.stem(of: modelURL), privacy: .public) still not loaded after \(CoreMLHealth.loadLimit, privacy: .public) — using the GPU from now on")
+            CoreMLHealth.markUnusable(modelURL)
+        }
     }
 }

@@ -38,6 +38,36 @@ nonisolated enum LoopDetector {
     static let phraseRepeatThreshold = 4
     static let maxPhraseLength = 4
 
+    // Collapses a word or short phrase repeated back-to-back (at the thresholds above) to
+    // one occurrence, line by line so paragraph breaks survive. Used when a phrase loop
+    // persists after the temperature retry.
+    static func collapseRepeats(_ text: String) -> String {
+        text.components(separatedBy: "\n").map(collapseLine).joined(separator: "\n")
+    }
+
+    private static func collapseLine(_ line: String) -> String {
+        var words = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        func key(_ w: String) -> String { w.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+        for n in 1...maxPhraseLength {
+            let needed = n == 1 ? singleWordRepeatThreshold : phraseRepeatThreshold
+            var i = 0
+            while i + n <= words.count {
+                let phrase = words[i..<(i + n)].map(key)
+                var repeats = 1
+                while i + (repeats + 1) * n <= words.count,
+                      words[(i + repeats * n)..<(i + (repeats + 1) * n)].map(key) == phrase {
+                    repeats += 1
+                }
+                if repeats >= needed, !phrase.allSatisfy(\.isEmpty) {
+                    // Keep the last copy: it carries the run's trailing punctuation.
+                    words.removeSubrange(i..<(i + (repeats - 1) * n))
+                }
+                i += 1
+            }
+        }
+        return words.joined(separator: " ")
+    }
+
     static func hasRepeatedPhrase(_ text: String) -> Bool {
         let words = text
             .split(whereSeparator: \.isWhitespace)

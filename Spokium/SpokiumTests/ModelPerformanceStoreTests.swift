@@ -80,3 +80,43 @@ struct ModelPerformanceStoreTests {
         #expect(ModelPerformanceStore.key(modelStem: "ggml-large-v3", coreML: true) == "ggml-large-v3+coreml")
     }
 }
+
+@MainActor
+struct RobustSpeedTests {
+    private typealias Run = ModelPerformanceStore.Run
+
+    @Test
+    func hungRun_doesNotSkewSpeed() {
+        // Ten normal runs at 10× real-time, then one that waited 10 minutes.
+        let normal = Array(repeating: Run(audioSeconds: 10, transcribeSeconds: 1), count: 10)
+        let hung = Run(audioSeconds: 10, transcribeSeconds: 600)
+        #expect(abs(ModelPerformanceStore.robustSpeed(of: normal + [hung]) - 10) < 0.01)
+    }
+
+    @Test
+    func nearZeroRun_doesNotInflateSpeed() {
+        let normal = Array(repeating: Run(audioSeconds: 10, transcribeSeconds: 1), count: 10)
+        let instant = Run(audioSeconds: 10, transcribeSeconds: 0.001)
+        #expect(abs(ModelPerformanceStore.robustSpeed(of: normal + [instant]) - 10) < 0.01)
+    }
+
+    @Test
+    func fewRuns_allCount() {
+        let runs = [Run(audioSeconds: 10, transcribeSeconds: 1), Run(audioSeconds: 10, transcribeSeconds: 9)]
+        #expect(abs(ModelPerformanceStore.robustSpeed(of: runs) - 2) < 0.01)
+    }
+
+    @Test
+    func recentRuns_overrideSkewedLegacyTotals_andAreCapped() {
+        // Legacy totals from before `recent` existed, skewed by a hang.
+        var record: ModelPerformanceStore.Record? = ModelPerformanceStore.Record(
+            count: 3, totalAudioSeconds: 30, totalTranscribeSeconds: 900)
+        #expect((record?.speedRatio ?? 0) < 0.1)
+        for _ in 0..<60 {
+            record = ModelPerformanceStore.merge(into: record, audioSeconds: 10, transcribeSeconds: 1)
+        }
+        #expect(record?.recent?.count == ModelPerformanceStore.recentLimit)
+        #expect(record?.count == 63)
+        #expect(abs((record?.speedRatio ?? 0) - 10) < 0.01)
+    }
+}

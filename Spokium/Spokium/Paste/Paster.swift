@@ -74,6 +74,21 @@ enum Paster {
         return pasteboard.changeCount
     }
 
+    // "Stop and send": Return after the paste. The short wait lets the target app
+    // insert the pasted text first; explicit empty flags so a still-held ⇧/⌘ from the
+    // shortcut doesn't turn it into ⇧Return or ⌘Return.
+    static func pressReturn() async {
+        try? await Task.sleep(for: .milliseconds(120))
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false)
+        else { return }
+        keyDown.flags = []
+        keyUp.flags = []
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
     private static func simulateCommandV() -> Bool {
         guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
 

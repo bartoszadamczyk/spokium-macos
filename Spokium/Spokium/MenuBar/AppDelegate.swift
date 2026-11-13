@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import KeyboardShortcuts
 import Observation
 import SwiftUI
@@ -56,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         observeErrors()
         observePersistentError()
         observeStateForInputDeviceMenu()
+        observeQuitWhenIdle()
         observeDebugModeChanges()
     }
 
@@ -88,9 +90,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // cleanup() frees whisper's Metal resources before C++ destructors run, but a
+        // model load or a first Core ML compile can't be interrupted and can take
+        // minutes. Quit, logout and restart must not wait for that.
+        let once = TerminateReplyOnce(sender)
         Task {
             await controller.cleanup()
-            sender.reply(toApplicationShouldTerminate: true)
+            once.reply()
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            once.reply()
         }
         return .terminateLater
     }
@@ -172,4 +182,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private static let settingsWindowID = "com_apple_SwiftUI_Settings_window"
+}
+
+// scripts/release.sh posts this before replacing the app in /Applications. Unlike a
+// normal Quit it never interrupts: it waits until nothing is being recorded, transcribed
+// or pasted, then quits. The name embeds the bundle ID so dev and production differ.
+nonisolated private let updateLogger = Logger(subsystem: "com.spokium.mac", category: "App")
+
+extension AppDelegate {
+    static var quitWhenIdleNotification: Notification.Name {
+        Notification.Name("\(Bundle.main.bundleIdentifier ?? "com.spokium.mac").quitWhenIdle")
+    }
+
+    func observeQuitWhenIdle() {
+        DistributedNotificationCenter.default().addObserver(
+            forName: Self.quitWhenIdleNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.quitWhenIdle() }
+        }
+    }
+
+    private func quitWhenIdle() {
+        Task { [weak self] in
+            var logged = false
+            while let self, self.controller.state != .idle {
+                if !logged {
+                    logged = true
+                    updateLogger.notice("Update requested a quit — waiting for the current dictation to finish")
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            // A moment for the paste and any clipboard handling to settle.
+            try? await Task.sleep(for: .seconds(1))
+            guard let self, self.controller.state == .idle else { return self?.quitWhenIdle() ?? () }
+            updateLogger.notice("Quitting for an update")
+            // Not NSApp.terminate(nil) directly: from inside a main-actor task, the
+            // nested run loop of a .terminateLater quit can't run cleanup's tasks, so
+            // Quit deadlocks. A run-loop perform starts it outside the task.
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+        }
+    }
+}
+
+// Whichever of cleanup and the deadline finishes first answers the terminate request.
+private final class TerminateReplyOnce {
+    private let app: NSApplication
+    private var replied = false
+
+    init(_ app: NSApplication) { self.app = app }
+
+    func reply() {
+        guard !replied else { return }
+        replied = true
+        app.reply(toApplicationShouldTerminate: true)
+    }
 }

@@ -82,10 +82,12 @@ extension RecordingController {
             logger.info("resumeRecordingAfterSplit: attempt \(i + 1)/\(retryDelaysMs.count)")
             do {
                 try await recorder.start(to: url)
+                guard await resumeStillWanted() else { return }
                 state = .recording
                 currentSegmentStartedAt = .now
                 startSegmentMonitors()
                 logger.info("resumeRecordingAfterSplit: succeeded on attempt \(i + 1) (\(delayMs)ms delay)")
+                honourPendingStop()
                 return
             } catch {
                 clearCurrentSegment()
@@ -103,10 +105,12 @@ extension RecordingController {
             currentRecordingURL = url
             do {
                 try await recorder.start(to: url)
+                guard await resumeStillWanted() else { return }
                 state = .recording
                 currentSegmentStartedAt = .now
                 startSegmentMonitors()
                 logger.info("resumeRecordingAfterSplit: succeeded on system default after device disconnect")
+                honourPendingStop()
                 return
             } catch {
                 clearCurrentSegment()
@@ -135,6 +139,18 @@ extension RecordingController {
         switchInputDevice(uid: replacement)
     }
 
+    // A cancel during the restart resets the session; without this check the resume
+    // would switch the mic back on with no session around it.
+    private func resumeStillWanted() async -> Bool {
+        guard case .recording = state else {
+            logger.info("resumeRecordingAfterSplit: session ended during restart — stopping the new recorder")
+            _ = await recorder.stop()
+            clearCurrentSegment()
+            return false
+        }
+        return true
+    }
+
     // Switches input device while recording without losing audio.
     func switchInputDevice(uid: String) {
         let previousUID = AppDefaults.selectedInputDevice
@@ -144,7 +160,10 @@ extension RecordingController {
         // Skip the segment split if the previous and new selections resolve to the
         // same physical device (e.g. "System Default" → the explicit mic that *is*
         // the default). Hardware hasn't changed, so there's nothing to restart.
-        if resolvedDeviceUID(for: previousUID) == resolvedDeviceUID(for: uid) {
+        // Compare with the device the recorder is actually using, not the stored setting:
+        // Settings' @AppStorage has already written the new UID before this runs.
+        let current = recorder.activeDeviceUID ?? resolvedDeviceUID(for: previousUID)
+        if current == resolvedDeviceUID(for: uid) {
             logger.info("switchInputDevice: same physical device — skipping split")
             return
         }

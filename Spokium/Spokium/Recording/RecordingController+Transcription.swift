@@ -7,6 +7,8 @@ extension RecordingController {
         lastError = nil
         persistentError = nil
         pendingStartCancel = false
+        pendingStop = false
+        sendAfterPaste = false
         sessionTexts = []
         pendingSegmentsAudioSeconds = 0
         currentSegmentStartedAt = nil
@@ -36,6 +38,8 @@ extension RecordingController {
             return
         }
         pendingStartCancel = false
+        pendingStop = false
+        sendAfterPaste = false
         pendingAudioSegments = []
         state = .starting
         Task { await startSegment(playSound: false) }
@@ -49,7 +53,7 @@ extension RecordingController {
             if pendingStartCancel {
                 _ = await recorder.stop()
                 clearCurrentSegment()
-                returnFromRecording()
+                returnFromRecording(keepPendingText: false)
                 logger.info("Recording start cancelled")
                 return
             }
@@ -61,6 +65,7 @@ extension RecordingController {
             startLivePump()
             if playSound { RecordingSounds.playStart() }
             logger.info("Recording segment started")
+            honourPendingStop()
         } catch AudioRecorderError.microphoneDenied {
             clearCurrentSegment()
             returnFromRecording()
@@ -79,7 +84,15 @@ extension RecordingController {
     static let stopTail: Duration = .milliseconds(300)
 
     func stop() {
-        guard recorder.isRunning, stopTailTask == nil else { return }
+        guard stopTailTask == nil else { return }
+        guard recorder.isRunning else {
+            // Mic still starting, or being restarted after a device change: remember it.
+            if state == .starting || isResumingAfterSplit {
+                pendingStop = true
+                logger.info("Stop requested while the mic isn't running yet — deferred")
+            }
+            return
+        }
 
         state = .finishing
         stopSegmentMonitors()
@@ -93,14 +106,25 @@ extension RecordingController {
         }
     }
 
+    // Called once recording is live again (segment start, resume after a split).
+    func honourPendingStop() {
+        guard pendingStop, case .recording = state else { return }
+        pendingStop = false
+        logger.info("Applying deferred stop")
+        stop()
+    }
+
     private func finishStop() async {
         let url = await recorder.stop()
-        // Cancelled (Shift+Esc) while the engine was stopping: cancel() already reset the
+        // Cancelled while the engine was stopping: cancel() already reset the
         // session, so drop this segment instead of transcribing it.
         if Task.isCancelled {
             if let url { try? FileManager.default.removeItem(at: url) }
             return
         }
+        // The tail is over. From here, queue-idle callbacks may finish the session again;
+        // during the tail they were ignored (a chunk finishing then must not end it early).
+        stopTailTask = nil
         currentRecordingURL = nil
         currentSegmentStartedAt = nil
 
@@ -119,9 +143,15 @@ extension RecordingController {
             segments.append(url)
         } else if segments.isEmpty {
             reportError(.recordingFailed("Audio recording failed to save."))
+            // An idle signal during the tail was ignored, so finish here if nothing is
+            // queued: paste what a continued session already has, or go idle.
             if queue.queuedCount == 0 {
-                state = .idle
-                monitors.stopEscape()
+                if sessionTexts.isEmpty {
+                    state = .idle
+                    monitors.stopEscape()
+                } else {
+                    finishSession()
+                }
             }
             return
         } else {
@@ -160,7 +190,9 @@ extension RecordingController {
                 }
             },
             onIdle: { [weak self] in
-                guard let self, case .finishing = self.state else { return }
+                // Not during the stop tail: the recorder is still capturing and
+                // finishStop() will queue (or finish) the rest itself.
+                guard let self, case .finishing = self.state, self.stopTailTask == nil else { return }
                 self.finishSession()
             }
         )
@@ -184,6 +216,8 @@ extension RecordingController {
         logger.info("Session finished: chars=\(finalText.count)")
         let stoppedAt = stopRequestedAt
         stopRequestedAt = nil
+        let send = sendAfterPaste
+        sendAfterPaste = false
         guard !finalText.isEmpty else {
             lastCompletion = .empty
             RecordingSounds.playEmpty()
@@ -204,6 +238,12 @@ extension RecordingController {
             case .pasted:
                 self.lastCompletion = .pasted
                 RecordingSounds.playPaste()
+                // Only after a real paste: with copy-only or a failed paste there is
+                // nothing in the field to send.
+                if send {
+                    await Paster.pressReturn()
+                    self.logger.notice("Pressed Return after paste (stop and send)")
+                }
             case .copied:
                 self.lastCompletion = .copied
                 RecordingSounds.playPaste()

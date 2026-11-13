@@ -27,12 +27,12 @@ Spokium runs under macOS App Sandbox. The project currently relies on Xcode-gene
 |---|---|
 | `com.apple.security.app-sandbox` | Enable App Sandbox confinement |
 | `com.apple.security.device.audio-input` | Record audio from the system microphone |
-| `com.apple.security.network.client` | Outbound client networking — used in code only to download whisper models from Hugging Face over HTTPS |
+| `com.apple.security.network.client` | Outbound client networking — used to download whisper models from Hugging Face over HTTPS, and for the optional Quiet while recording requests to user-entered local devices |
 
 What sandbox enforces in practice:
 
 - **Filesystem** — Spokium resolves model storage through `FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)`, which lands inside the app container for sandboxed builds. It does not request broad user-selected-file entitlements.
-- **Network** — outbound client networking is entitled, but source review shows only `URLSession` model downloads from `https://huggingface.co/ggerganov/whisper.cpp/...`. The app has no inbound server entitlement.
+- **Network** — outbound client networking is entitled, but source review shows only `URLSession` model downloads from `https://huggingface.co/ggerganov/whisper.cpp/...`. Optionally, "Quiet while recording" sends a bare `POST`/`DELETE` (no body, nothing about the recording) to URLs the user enters, plain `http` only on the local network. The app has no inbound server entitlement.
 - **IPC** — no arbitrary Mach lookups. No whitelisted out-of-process services.
 - **Hardware** — only the microphone is unlocked. Camera, Bluetooth, USB, location, contacts, calendars, photo library, and printing are all denied at the entitlement level.
 
@@ -64,7 +64,7 @@ This list is documented because absence is sometimes more important than presenc
 - **Camera, Bluetooth, Contacts, Calendars, Reminders, Photos, Location, USB, Printing** — denied at the entitlement level (each `ENABLE_RESOURCE_ACCESS_*` build setting is `NO`). Spokium cannot prompt for these, even by accident.
 - **Notifications** — Spokium does not call `UNUserNotificationCenter`. No notification permission prompt. Feedback is delivered via the overlay HUD and the menu bar.
 - **Network Server** — `com.apple.security.network.server` is not granted. Spokium cannot accept inbound connections.
-- **Network Client** — `com.apple.security.network.client` IS granted, but only outbound HTTPS to `huggingface.co` is used in practice by the current code (Whisper model downloads). No telemetry, no analytics, no crash reporting.
+- **Network Client** — `com.apple.security.network.client` IS granted, but only outbound HTTPS to `huggingface.co` is used for Whisper model downloads. Optionally, "Quiet while recording" sends a bare `POST`/`DELETE` (no body, nothing about the recording) to URLs the user enters, plain `http` only on the local network. No telemetry, no analytics, no crash reporting.
 - **Keychain access** — never requested. No items written to or read from the keychain.
 - **`get-task-allow` debugging entitlement** — present in Debug builds (Xcode adds it for `lldb` attach). **Not present in Release / notarized builds.**
 
