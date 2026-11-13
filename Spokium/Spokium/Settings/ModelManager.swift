@@ -4,6 +4,12 @@ import os
 import OSLog
 
 struct WhisperModel: Identifiable, Equatable {
+    // Pinned to a commit of the Hugging Face repo rather than `main`, so downloads stay
+    // reproducible and match the checksums below even if upstream replaces a file.
+    // When bumping, update the SHA-1/SHA-256 values too.
+    static let huggingFaceCommit = "5359861c739e955e79d9a303bcbc70fb988958b1"
+    static let huggingFaceBase = "https://huggingface.co/ggerganov/whisper.cpp/resolve/\(huggingFaceCommit)"
+
     let name: String
     let displayName: String
     let sizeLabel: String
@@ -20,7 +26,7 @@ struct WhisperModel: Identifiable, Equatable {
     private var stem: String { URL(fileURLWithPath: fileName).deletingPathExtension().lastPathComponent }
 
     var coreMLDownloadURL: URL {
-        URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(stem)-encoder.mlmodelc.zip")!
+        URL(string: "\(WhisperModel.huggingFaceBase)/\(stem)-encoder.mlmodelc.zip")!
     }
 
     var coreMLURL: URL { Self.coreMLURL(forModelAt: localURL) }
@@ -33,7 +39,7 @@ struct WhisperModel: Identifiable, Equatable {
     }
 
     var downloadURL: URL {
-        URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(fileName)")!
+        URL(string: "\(WhisperModel.huggingFaceBase)/\(fileName)")!
     }
 
     var localURL: URL {
@@ -279,6 +285,7 @@ final class ModelManager {
         try? FileManager.default.removeItem(at: model.coreMLURL)
         coreMLInstalledNames.remove(model.name)
         CoreMLHealth.clear(model.localURL)
+        CoreMLHealth.setEnabledByUser(true, model.localURL)
         NotificationCenter.default.post(name: .coreMLEncoderChanged, object: model.localURL)
     }
 
@@ -312,7 +319,7 @@ final class ModelManager {
         } catch let error as URLError where error.code == .cancelled {
         } catch {
             lastDownloadError = "\(model.displayName) Core ML encoder: \(error.localizedDescription)"
-            logger.error("Core ML encoder download failed for \(model.name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("Core ML encoder download failed for \(model.name, privacy: .public): \(error.localizedDescription, privacy: .private)")
         }
     }
 

@@ -25,10 +25,13 @@ nonisolated enum DefaultsKey {
     static let macVolumeDuck = "macVolumeDuck"
     // Model stems whose Neural Engine encoder never finished loading on this Mac.
     static let coreMLUnusableModels = "coreMLUnusableModels"
+    // Model stems whose downloaded Neural Engine encoder the user switched off.
+    static let coreMLDisabledModels = "coreMLDisabledModels"
     static let selectedQuietEndpoint = "selectedQuietEndpoint"
     static let maxRecordingMinutes = "maxRecordingMinutes"
     static let modelPerformance = "modelPerformance"
     static let keepRecentTranscripts = "keepRecentTranscripts"
+    static let privateClipboard = "privateClipboard"
     static let liveTranscription = "liveTranscription"
     static let autoDetectLanguages = "autoDetectLanguages"
     static let languageUsage = "languageUsage"
@@ -59,6 +62,7 @@ nonisolated enum AppDefaults {
     static let pushToRecordDefault = false
     static let playSoundsDefault = true
     static let keepRecentTranscriptsDefault = true
+    static let privateClipboardDefault = true
     static let maxRecordingMinutesDefault: Double = 30.0
     // 0 = no limit. Earlier versions offered 1/2/5 minutes; those are mapped up to the
     // nearest current option (see normalizedMaxRecordingMinutes).
@@ -107,6 +111,11 @@ nonisolated enum AppDefaults {
         set { store.set(newValue, forKey: DefaultsKey.selectedModel) }
     }
 
+    static var coreMLDisabledModels: [String] {
+        get { store.stringArray(forKey: DefaultsKey.coreMLDisabledModels) ?? [] }
+        set { store.set(newValue, forKey: DefaultsKey.coreMLDisabledModels) }
+    }
+
     static var coreMLUnusableModels: [String] {
         get { store.stringArray(forKey: DefaultsKey.coreMLUnusableModels) ?? [] }
         set { store.set(newValue, forKey: DefaultsKey.coreMLUnusableModels) }
@@ -142,6 +151,11 @@ nonisolated enum AppDefaults {
     static var playSounds: Bool {
         get { store.object(forKey: DefaultsKey.playSounds) as? Bool ?? playSoundsDefault }
         set { store.set(newValue, forKey: DefaultsKey.playSounds) }
+    }
+
+    static var privateClipboard: Bool {
+        get { store.object(forKey: DefaultsKey.privateClipboard) as? Bool ?? privateClipboardDefault }
+        set { store.set(newValue, forKey: DefaultsKey.privateClipboard) }
     }
 
     static var keepRecentTranscripts: Bool {

@@ -6,6 +6,8 @@ Context for AI coding assistants working in this repo.
 
 A native macOS menu-bar dictation app. Tap a global hotkey to start recording, tap again to stop → audio is transcribed and pasted into the focused window. Transcription is done locally via whisper.cpp. See `README.md` for the full goals list.
 
+What's next, open findings, ideas and **rejected ideas** (don't re-propose those) are in `ROADMAP.md`.
+
 ## Tech choices (locked in)
 
 - **Language:** Swift 6.0 with strict concurrency, default `@MainActor` isolation.
@@ -99,7 +101,14 @@ spokium-macos/
 ## Key implementation details
 
 ### State machine (RecordingController)
-`idle` → `starting` → `recording` → `finishing` → `idle`. `starting` prevents double-start races while microphone/audio setup is in flight. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit, but quit cleanup still needs a direct `transcriber?.abort()` call and active-recorder stop/delete handling. User can cancel at any state via the **cancel shortcut** (default ⌘⎋, configurable in Settings → General via `CancelShortcutField`) or via the menu item, which shows it. It is *stored* as `KeyboardShortcuts.Name.cancelRecording` but never registered as a Carbon hotkey: KeyboardShortcuts' recorder and Carbon refuse Shift-only combinations (⇧⎋, ⇧;), which users want here. `RecordingMonitors.startEscape` matches it with a global key monitor (other apps; needs Accessibility) plus a local one (Spokium's own windows), only while recording or transcribing. A bare letter/digit can't be chosen, so typing can't cancel.
+`idle` → `starting` → `recording` → `finishing` → `idle`. `starting` prevents double-start races while microphone/audio setup is in flight. The `finishing` state covers transcription + paste. Errors are surfaced via `lastError: RecordingError?` which AppDelegate observes and displays as `NSAlert`. Error cases: `.noModel`, `.microphoneDenied`, `.recordingFailed`, `.transcriptionFailed`, `.downloadFailed`, `.noAccessibility`. Transcription task is tracked and cancelled on quit, but quit cleanup still needs a direct `transcriber?.abort()` call and active-recorder stop/delete handling. User can cancel at any state via the **cancel shortcut** (`KeyboardShortcuts.Name.cancelRecording`, default ⌘⎋, recorder in Settings → General) or via the menu item, which shows it. It's a Carbon hotkey enabled only while recording or transcribing (`RecordingMonitors.startEscape/stopEscape`; `syncCancelShortcut` re-disables it after the user records one while idle), so it leaves the keys to other apps while idle. Not a key monitor: inside the sandbox a global `NSEvent` monitor never sees keys sent to other apps. Carbon can't do Shift-only combinations, so saved ⇧⎋ / ⇧; (allowed in 1.5.2–1.5.3) are reset to the default at launch.
+
+### Sleep, lock and idle
+- **Sleep / screen lock:** a recording in progress is stopped (`stopForSleepOrLock`, on `NSWorkspace.willSleepNotification` and the `com.apple.screenIsLocked` distributed notification) and transcribed; the text is copied, not pasted, and no clipboard restore is scheduled (it would fire on wake) — `copyInsteadOfPaste` → `Paster.paste(_:copyOnly:)`.
+- **Idle unload:** after 15 min idle (`RecordingController.idleUnloadDelay`) the whisper context is freed via `queue.unload()`; the next recording's warm-up reloads it. `unload()` detaches its transcribers before awaiting, so a warm-up starting meanwhile isn't discarded.
+
+### Private clipboard
+`Paster.writeTranscript` (used for pastes and for copying recent transcripts) writes with `prepareForNewContents(with: .currentHostOnly)` (no Handoff / Universal Clipboard) and adds the `org.nspasteboard.TransientType` + `ConcealedType` markers so clipboard-history apps don't store transcripts. Toggle `privateClipboard` (Settings → Output, default on).
 
 ### Cancel during transcription
 `Transcriber` exposes a nonisolated `abort()` method that flips an `Atomic<Bool>` inside a small `Sendable` wrapper. The flag's pointer is passed to whisper via `params.abort_callback_user_data`; the C callback reads the bool. Whisper polls this between graph computations and exits early, so cancellation actually halts inference instead of just discarding the result. `Transcriber.transcribe(...)` throws `TranscriberError.cancelled` when the flag was set, which `RecordingController` catches silently.
@@ -157,7 +166,7 @@ Whisper sometimes emits a long run of lowercase words with no punctuation, copyi
 
 ### Current architecture gaps to preserve in recommendations
 - File mode (`liveTranscription` off): `AudioLoader.loadResampled(url:)` reads the entire recording into memory.
-- Failed chunks/recordings are not retryable yet; the audio is deleted at session end (see `plan.md`, D5).
+- Failed chunks/recordings are not retryable yet; the audio is deleted at session end (see `ROADMAP.md`, Ideas).
 
 ### Tests
 - Test target: `SpokiumTests` (Swift Testing, not XCTest). Run via `RunAllTests` or `⌘U`.
@@ -253,9 +262,11 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `autoDetectLanguages` | String (comma-separated codes) | `""` (any) | TranscriptionTab ("Languages I speak"), Transcriber fallback |
 | `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`, each with `isEnabled` — any number at once) | IntegrationsTab, menu "Quiet While Recording", QuietEndpointStore, RoomQuieter |
 | `selectedQuietEndpoint` | String (endpoint UUID) | `""` | Legacy (1.5.3 single selection); read once by QuietEndpointStore to set `isEnabled` |
+| `coreMLDisabledModels` | [String] (model stems) | `[]` | Model tab "Use" checkbox: downloaded encoder switched off → loaded GPU-only (`CoreMLHealth.loadGPUOnly`) |
 | `coreMLUnusableModels` | [String] (model stems) | `[]` | CoreMLHealth (set after a 10-min Neural Engine load), Model tab Retry |
 | `macVolumeWhileRecording` | Bool (1.5.3 stored `unchanged`/`lower`/`mute`, mapped on read) | `false` | IntegrationsTab, menu "Quiet While Recording", MacVolumeDucker |
 | `macVolumeDuck` | Data (JSON, transient) | absent | MacVolumeDucker: volume to restore; present only while a duck is in effect, repaired at launch |
+| `privateClipboard` | Bool | `true` | OutputTab, Paster.writeTranscript |
 | `languageUsage` | Data | `{}` (JSON `[code: characters]`) | LanguageUsageStore (recorded in TranscriptionQueue, shown in TranscriptionTab) |
 | `voiceActivityDetection` | Bool (hidden, terminal only) | `true` | RecordingController+Live (Silero VAD vs RMS chunking) |
 

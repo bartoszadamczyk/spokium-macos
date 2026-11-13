@@ -5,6 +5,7 @@ struct OutputTab: View {
     @AppStorage(DefaultsKey.autoPaste) private var autoPaste = AppDefaults.autoPasteDefault
     @AppStorage(DefaultsKey.preserveClipboard) private var preserveClipboard = AppDefaults.preserveClipboardDefault
     @AppStorage(DefaultsKey.keepRecentTranscripts) private var keepRecentTranscripts = AppDefaults.keepRecentTranscriptsDefault
+    @AppStorage(DefaultsKey.privateClipboard) private var privateClipboard = AppDefaults.privateClipboardDefault
 
     var body: some View {
         Form {
@@ -18,6 +19,10 @@ struct OutputTab: View {
                 Toggle(isOn: $preserveClipboard) {
                     Text("Restore clipboard 20 s after transcribing")
                     Text("The transcript stays on the clipboard long enough to paste it manually, then your previous clipboard comes back — unless you copy something else first.")
+                }
+                Toggle(isOn: $privateClipboard) {
+                    Text("Keep transcripts private")
+                    Text("Clipboard-history apps don't save them, and they aren't offered to your other devices via Handoff.")
                 }
                 Toggle("Keep recent transcripts (5 min, memory only)", isOn: $keepRecentTranscripts)
                     .onChange(of: keepRecentTranscripts) { _, newValue in

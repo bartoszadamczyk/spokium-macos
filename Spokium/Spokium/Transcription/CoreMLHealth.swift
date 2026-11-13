@@ -27,6 +27,22 @@ nonisolated enum CoreMLHealth {
         NotificationCenter.default.post(name: .coreMLHealthChanged, object: modelURL)
     }
 
+    // The user's choice in Settings → Model, independent of the health mark.
+    static func isDisabledByUser(_ modelURL: URL) -> Bool {
+        AppDefaults.coreMLDisabledModels.contains(stem(of: modelURL))
+    }
+
+    static func setEnabledByUser(_ enabled: Bool, _ modelURL: URL) {
+        var stems = AppDefaults.coreMLDisabledModels.filter { $0 != stem(of: modelURL) }
+        if !enabled { stems.append(stem(of: modelURL)) }
+        AppDefaults.coreMLDisabledModels = stems
+    }
+
+    // Load the model without its encoder: switched off, or marked unusable.
+    static func loadGPUOnly(_ modelURL: URL) -> Bool {
+        isDisabledByUser(modelURL) || isUnusable(modelURL)
+    }
+
     static func clear(_ modelURL: URL) {
         let stems = AppDefaults.coreMLUnusableModels.filter { $0 != stem(of: modelURL) }
         guard stems.count != AppDefaults.coreMLUnusableModels.count else { return }

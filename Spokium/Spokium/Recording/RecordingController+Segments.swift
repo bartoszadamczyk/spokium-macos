@@ -91,7 +91,7 @@ extension RecordingController {
                 return
             } catch {
                 clearCurrentSegment()
-                logger.warning("resumeRecordingAfterSplit: attempt \(i + 1) failed: \(error.localizedDescription, privacy: .public) (code=\((error as NSError).code))")
+                logger.warning("resumeRecordingAfterSplit: attempt \(i + 1) failed: \(error.localizedDescription, privacy: .private) (code=\((error as NSError).code))")
             }
         }
 
@@ -114,7 +114,7 @@ extension RecordingController {
                 return
             } catch {
                 clearCurrentSegment()
-                logger.error("resumeRecordingAfterSplit: fallback to system default also failed: \(error.localizedDescription, privacy: .public) (code=\((error as NSError).code))")
+                logger.error("resumeRecordingAfterSplit: fallback to system default also failed: \(error.localizedDescription, privacy: .private) (code=\((error as NSError).code))")
             }
         }
 
@@ -135,7 +135,7 @@ extension RecordingController {
             builtInUsable: !AudioInputDevice.isLidClosed
         ), replacement != selected else { return }
         let name = AudioInputDevice.available().first { $0.uid == replacement }?.name ?? "System Default"
-        logger.info("Input device removed — selection switched to \(name, privacy: .public)")
+        logger.info("Input device removed — selection switched to \(name, privacy: .private)")
         switchInputDevice(uid: replacement)
     }
 

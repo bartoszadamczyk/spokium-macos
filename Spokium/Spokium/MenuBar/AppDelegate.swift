@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DebugRecordingStore.cleanIfDisabled()
         // Repairs a duck left behind by a crash or force-quit mid-recording.
         MacVolumeDucker.restore()
+        Self.resetShiftOnlyCancelShortcut()
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.menu = buildMenu()
@@ -189,6 +190,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 // scripts/release.sh posts this before replacing the app in /Applications. Unlike a
 // normal Quit it never interrupts: it waits until nothing is being recorded, transcribed
 // or pasted, then quits. The name embeds the bundle ID so dev and production differ.
+extension AppDelegate {
+    // 1.5.2–1.5.3 allowed (and 1.5.2 defaulted to) ⇧⎋, which a Carbon hotkey can't do.
+    static func resetShiftOnlyCancelShortcut() {
+        guard let shortcut = KeyboardShortcuts.getShortcut(for: .cancelRecording),
+              shortcut.modifiers.subtracting([.shift, .function]).isEmpty else { return }
+        KeyboardShortcuts.reset(.cancelRecording)
+    }
+}
+
 nonisolated private let updateLogger = Logger(subsystem: "com.spokium.mac", category: "App")
 
 extension AppDelegate {

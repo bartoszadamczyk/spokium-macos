@@ -6,7 +6,7 @@ import OSLog
 // Owns the timers/monitors that bracket a recording session:
 //   - level polling (50ms RMS samples → smoothed Float)
 //   - auto-stop deadline
-//   - cancel-shortcut key monitors (global + local)
+//   - cancel hotkey (enabled only while a session is active)
 //
 // All callbacks run on MainActor. RecordingController holds one instance and
 // drives starts/stops at the appropriate state-machine transitions.
@@ -15,7 +15,6 @@ import OSLog
 // from RecordingController.splitCurrentSegment directly — no timer involved.
 final class RecordingMonitors {
     private var levelTimer: Timer?
-    private var escapeMonitors: [Any] = []
     private var autoStopTask: Task<Void, Never>?
     private var smoothedLevel: Float = 0
     private var silentTicks: Int = 0
@@ -99,12 +98,10 @@ final class RecordingMonitors {
         heardAudio = false
     }
 
-    func startAutoStop(after minutes: Double, onFire: @escaping @MainActor () -> Void) {
+    func startAutoStop(after delay: Duration, onFire: @escaping @MainActor () -> Void) {
         autoStopTask?.cancel()
-        guard minutes > 0 else { return }
-        let nanoseconds = UInt64(minutes * 60 * 1_000_000_000)
         autoStopTask = Task {
-            try? await Task.sleep(nanoseconds: nanoseconds)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await MainActor.run { onFire() }
         }
@@ -115,46 +112,12 @@ final class RecordingMonitors {
         autoStopTask = nil
     }
 
-    // Two monitors: the global one sees keys sent to other apps (needs the Accessibility
-    // permission), the local one keys sent to Spokium's own windows such as Settings.
-    func startEscape(onPress: @escaping @MainActor () -> Void) {
-        guard escapeMonitors.isEmpty else { return }
-        // Monitor handlers run on the main thread.
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { event in
-            MainActor.assumeIsolated {
-                guard Self.isCancelShortcut(event) else { return }
-                onPress()
-            }
-        }) {
-            escapeMonitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { event in
-            let matched = MainActor.assumeIsolated {
-                guard Self.isCancelShortcut(event) else { return false }
-                onPress()
-                return true
-            }
-            return matched ? nil : event
-        }) {
-            escapeMonitors.append(local)
-        }
+    func startEscape() {
+        KeyboardShortcuts.enable(.cancelRecording)
     }
 
     func stopEscape() {
-        for monitor in escapeMonitors { NSEvent.removeMonitor(monitor) }
-        escapeMonitors = []
-    }
-
-    nonisolated static func relevantModifiers(of event: NSEvent) -> NSEvent.ModifierFlags {
-        event.modifierFlags
-            .intersection(.deviceIndependentFlagsMask)
-            .subtracting([.capsLock, .numericPad, .function])
-    }
-
-    private static func isCancelShortcut(_ event: NSEvent) -> Bool {
-        guard let shortcut = KeyboardShortcuts.getShortcut(for: .cancelRecording) else { return false }
-        return Int(event.keyCode) == shortcut.carbonKeyCode
-            && relevantModifiers(of: event) == shortcut.modifiers.subtracting([.function])
+        KeyboardShortcuts.disable(.cancelRecording)
     }
 
     func stopAll() {

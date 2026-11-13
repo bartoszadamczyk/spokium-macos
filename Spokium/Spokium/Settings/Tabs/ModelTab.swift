@@ -224,11 +224,12 @@ struct CoreMLEncoderRow: View {
     @Bindable var manager: ModelManager
     @Environment(RecordingController.self) private var controller
     @State private var unusable = false
+    @State private var enabled = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             encoderRow
-            if unusable, manager.coreMLInstalledNames.contains(model.name) {
+            if unusable, enabled, manager.coreMLInstalledNames.contains(model.name) {
                 HStack(spacing: 6) {
                     Text("Didn't finish preparing on this Mac — using the GPU instead.")
                         .font(.caption)
@@ -244,6 +245,7 @@ struct CoreMLEncoderRow: View {
         }
         .task {
             unusable = CoreMLHealth.isUnusable(model.localURL)
+            enabled = !CoreMLHealth.isDisabledByUser(model.localURL)
             for await _ in NotificationCenter.default.notifications(named: .coreMLHealthChanged) {
                 unusable = CoreMLHealth.isUnusable(model.localURL)
             }
@@ -273,9 +275,16 @@ struct CoreMLEncoderRow: View {
                 }
                 .buttonStyle(.plain)
             } else if manager.coreMLInstalledNames.contains(model.name) {
-                Image(systemName: "checkmark.circle.fill")
+                // Downloaded: switch between the Neural Engine and the GPU without deleting it.
+                Toggle("Use", isOn: $enabled)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
                     .font(.caption)
-                    .foregroundStyle(.green)
+                    .onChange(of: enabled) { _, on in
+                        CoreMLHealth.setEnabledByUser(on, model.localURL)
+                        NotificationCenter.default.post(name: .coreMLEncoderChanged, object: model.localURL)
+                    }
+                    .help("Use the Neural Engine for this model. Off: the GPU, with the encoder kept for later.")
                 Button {
                     manager.deleteCoreML(model)
                 } label: {

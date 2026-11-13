@@ -32,8 +32,10 @@ struct GeneralTab: View {
                 KeyboardShortcuts.Recorder("Shortcut:", name: .toggleRecording)
                 KeyboardShortcuts.Recorder("Stop and send:", name: .toggleRecordingAndSend)
                     .help("Starts recordings like the main shortcut; stopping with it also presses Return after the paste — to send a message or submit a prompt.")
-                CancelShortcutField()
-                    .help("Cancels a recording or transcription. Only watched while one is running. Any combination works, including Shift-only ones such as ⇧⎋. Needs the Accessibility permission to work while another app is in front.")
+                KeyboardShortcuts.Recorder("Cancel:", name: .cancelRecording) { _ in
+                    controller.syncCancelShortcut()
+                }
+                .help("Cancels a recording or transcription. Only active while one is running, so the keys stay free for other apps the rest of the time.")
                 Toggle("Push to record (hold shortcut while speaking)", isOn: $pushToRecord)
                 Picker("Input device:", selection: $selectedInputDevice) {
                     Text(defaultInputName.isEmpty ? "System Default" : "System Default (\(defaultInputName))").tag("")

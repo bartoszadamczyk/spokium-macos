@@ -24,10 +24,11 @@ extension KeyboardShortcuts.Name {
         default: defaultSend
     )
 
-    // Cancels a recording or transcription. Only *stored* through KeyboardShortcuts (no
-    // handler is registered, so it's never a Carbon hotkey): the recorder and Carbon
-    // refuse Shift-only combinations such as ⇧⎋ or ⇧;, which users want here. Matched
-    // by key monitors in RecordingMonitors while a session is active instead.
+    // Cancels a recording or transcription. A Carbon hotkey enabled only while a session
+    // is active, so the keys stay free for other apps the rest of the time. Not a key
+    // monitor: inside the sandbox a global monitor never sees keys sent to other apps
+    // (it only worked while Spokium's own window was focused). Carbon can't do
+    // Shift-only combinations, hence ⌘⎋ rather than ⇧⎋.
     static let cancelRecording = Self(
         "cancelRecording",
         default: KeyboardShortcuts.Shortcut(.escape, modifiers: [.command])

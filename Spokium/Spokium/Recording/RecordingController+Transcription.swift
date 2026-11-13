@@ -9,6 +9,7 @@ extension RecordingController {
         pendingStartCancel = false
         pendingStop = false
         sendAfterPaste = false
+        copyInsteadOfPaste = false
         sessionTexts = []
         pendingSegmentsAudioSeconds = 0
         currentSegmentStartedAt = nil
@@ -40,6 +41,7 @@ extension RecordingController {
         pendingStartCancel = false
         pendingStop = false
         sendAfterPaste = false
+        copyInsteadOfPaste = false
         pendingAudioSegments = []
         state = .starting
         Task { await startSegment(playSound: false) }
@@ -73,7 +75,7 @@ extension RecordingController {
         } catch {
             clearCurrentSegment()
             returnFromRecording()
-            logger.error("startSegment failed: \(error.localizedDescription, privacy: .public) (code=\((error as NSError).code)) isResumingAfterSplit=\(self.isResumingAfterSplit)")
+            logger.error("startSegment failed: \(error.localizedDescription, privacy: .private) (code=\((error as NSError).code)) isResumingAfterSplit=\(self.isResumingAfterSplit)")
             reportError(.recordingFailed(error.localizedDescription))
         }
     }
@@ -218,6 +220,8 @@ extension RecordingController {
         stopRequestedAt = nil
         let send = sendAfterPaste
         sendAfterPaste = false
+        let copyOnly = copyInsteadOfPaste
+        copyInsteadOfPaste = false
         guard !finalText.isEmpty else {
             lastCompletion = .empty
             RecordingSounds.playEmpty()
@@ -231,7 +235,7 @@ extension RecordingController {
 
         Task { [weak self] in
             guard let self else { return }
-            let result = await Paster.paste(finalText)
+            let result = await Paster.paste(finalText, copyOnly: copyOnly)
             let latency = stoppedAt.map { Self.seconds(of: ContinuousClock.now - $0) }
             self.logger.notice("Paste result: \(String(describing: result), privacy: .public), stop→paste=\(latency.map { String(format: "%.2fs", $0) } ?? "n/a", privacy: .public), live=\(wasLive)")
             switch result {

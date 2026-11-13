@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Bumps CFBundleVersion + MARKETING_VERSION, archives, notarizes,
-# installs to /Applications, and writes dist/<version>/{Spokium.app, Spokium.zip}.
+# Bumps CFBundleVersion + MARKETING_VERSION, archives, notarizes, installs to
+# /Applications, writes dist/<version>/{Spokium.app, Spokium.zip, dSYMs}, then commits
+# the version bump and tags v<version>. Never pushes.
 #
 # Usage: ./scripts/release.sh 1.2.4
 #
@@ -29,6 +30,17 @@ if [ -d "$DIST_DIR" ]; then
     exit 1
 fi
 
+# A release must match a commit: 1.5.2 was once built from uncommitted changes.
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+    echo "Uncommitted changes — commit or stash them first:"
+    git -C "$REPO_ROOT" status --short
+    exit 1
+fi
+if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+    echo "Tag v$VERSION already exists."
+    exit 1
+fi
+
 echo "Running tests…"
 "$REPO_ROOT/scripts/check.sh" --tests
 
@@ -38,6 +50,10 @@ echo "Bumping CURRENT_PROJECT_VERSION: $CURRENT -> $NEW"
 echo "Setting MARKETING_VERSION: $VERSION"
 sed -i '' -E "s/^CURRENT_PROJECT_VERSION = [0-9]+$/CURRENT_PROJECT_VERSION = $NEW/" "$VERSION_FILE"
 sed -i '' -E "s/^MARKETING_VERSION = .*$/MARKETING_VERSION = $VERSION/" "$VERSION_FILE"
+
+# Undo the bump if anything below fails, so the next run isn't blocked by a dirty tree.
+RELEASED=no
+trap '[ "$RELEASED" = yes ] || git -C "$REPO_ROOT" checkout -- "$VERSION_FILE"' EXIT
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -66,6 +82,13 @@ echo "Checking the notarized app…"
 mkdir -p "$DIST_DIR"
 cp -R "$APP" "$DIST_DIR/Spokium.app"
 ditto -c -k --keepParent "$DIST_DIR/Spokium.app" "$DIST_DIR/Spokium.zip"
+# Kept per release: without them crash reports from this version can't be symbolicated
+# (build/ is wiped at the start of every release).
+cp -R "$ARCHIVE/dSYMs" "$DIST_DIR/dSYMs"
+
+git -C "$REPO_ROOT" commit -q -m "Release $VERSION (build $NEW)" -- "$VERSION_FILE"
+git -C "$REPO_ROOT" tag -a "v$VERSION" -m "Spokium $VERSION (build $NEW)"
+RELEASED=yes
 
 # Replace the installed app without cutting off a dictation: ask the running copy to
 # quit when idle (1.5.2+ waits until nothing is recorded, transcribed or pasted), then
@@ -93,4 +116,5 @@ if [ "$WAS_RUNNING" = yes ]; then
     open "$INSTALLED"
 fi
 
-echo "Done. Release $VERSION (build $NEW) installed and archived in dist/$VERSION."
+echo "Done. Release $VERSION (build $NEW) installed, archived in dist/$VERSION, committed and tagged v$VERSION."
+echo "Not pushed: git push && git push origin v$VERSION, then upload dist/$VERSION/Spokium.zip to the GitHub release."

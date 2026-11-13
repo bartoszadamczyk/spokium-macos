@@ -19,7 +19,7 @@ struct CoreMLEncoderTests {
         #expect(model.coreMLURL.lastPathComponent == "ggml-large-v3-encoder.mlmodelc")
         #expect(model.coreMLURL.deletingLastPathComponent() == model.localURL.deletingLastPathComponent())
         #expect(model.coreMLDownloadURL.absoluteString
-            == "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-encoder.mlmodelc.zip")
+            == "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-encoder.mlmodelc.zip")
     }
 
     @Test

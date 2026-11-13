@@ -202,7 +202,7 @@ final class AudioRecorder {
                 // device that was gone before launch. Saved, so the menu shows it.
                 device = AudioInputDevice.nextBest()
                 AppDefaults.selectedInputDevice = device?.uid ?? ""
-                logger.error("Input device \(uid, privacy: .public) not available — switched selection to \(device?.name ?? "System Default", privacy: .public)")
+                logger.error("Input device \(uid, privacy: .private) not available — switched selection to \(device?.name ?? "System Default", privacy: .private)")
             }
         }
 

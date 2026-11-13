@@ -37,24 +37,22 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		01976699903249CB70848807 /* plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = plan.md; path = ../plan.md; sourceTree = "<group>"; };
 		18D51CCCCDC57759F821FCA8 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
-		25656A43ED2D9B08235BC27E /* APP_REVIEW_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = APP_REVIEW_IDEAS.md; path = ../APP_REVIEW_IDEAS.md; sourceTree = "<group>"; };
 		477215DDE916665FC8AF4088 /* DEV.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = DEV.md; path = ../DEV.md; sourceTree = "<group>"; };
 		643F98A3EA97C827E450A3A1 /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
 		700288AB031EEBD8BD571D83 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = AGENTS.md; path = ../AGENTS.md; sourceTree = "<group>"; };
 		8A67FBB0A349B37117D8FBC8 /* SpokiumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpokiumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B76BA56429B38683E5C0F2E /* ROADMAP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = ROADMAP.md; path = ../ROADMAP.md; sourceTree = "<group>"; };
 		A1AEF717407442BF72A4753F /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		C368FDED9D3E25D0B3598A42 /* project.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = project.yml; sourceTree = "<group>"; };
 		C66CDA3C8321AE4A8A3E8923 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
-		C7C706D3770372660B806F0B /* Spokium Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Spokium Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7C706D3770372660B806F0B /* Spokium.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Spokium.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D07A98CA69117A9ABFBB8B57 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE.txt; path = ../LICENSE.txt; sourceTree = "<group>"; };
-		E8CD8478E68759557B628D3D /* REJECTED_IDEAS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = REJECTED_IDEAS.md; path = ../REJECTED_IDEAS.md; sourceTree = "<group>"; };
 		FC2CF0176720EC4ABDE88986 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = SECURITY.md; path = ../SECURITY.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		9BB409ADA4927B76920E7A86 /* Exceptions for "Spokium" folder in "Spokium" target */ = {
+		9BB409ADA4927B76920E7A86 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -67,13 +65,21 @@
 		36BFBF697C13F7BA30A195D0 /* Spokium */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				9BB409ADA4927B76920E7A86 /* Exceptions for "Spokium" folder in "Spokium" target */,
+				9BB409ADA4927B76920E7A86 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
 			);
 			path = Spokium;
 			sourceTree = "<group>";
 		};
 		613AB0D11FF062798AE31F69 /* SpokiumTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
 			path = SpokiumTests;
 			sourceTree = "<group>";
 		};
@@ -96,13 +102,11 @@
 			isa = PBXGroup;
 			children = (
 				700288AB031EEBD8BD571D83 /* AGENTS.md */,
-				25656A43ED2D9B08235BC27E /* APP_REVIEW_IDEAS.md */,
 				477215DDE916665FC8AF4088 /* DEV.md */,
 				D07A98CA69117A9ABFBB8B57 /* LICENSE.txt */,
-				01976699903249CB70848807 /* plan.md */,
 				C368FDED9D3E25D0B3598A42 /* project.yml */,
 				C66CDA3C8321AE4A8A3E8923 /* README.md */,
-				E8CD8478E68759557B628D3D /* REJECTED_IDEAS.md */,
+				9B76BA56429B38683E5C0F2E /* ROADMAP.md */,
 				FC2CF0176720EC4ABDE88986 /* SECURITY.md */,
 				18D51CCCCDC57759F821FCA8 /* THIRD_PARTY_NOTICES.md */,
 			);
@@ -124,7 +128,7 @@
 		6181748DE0D204F2C7064E14 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C7C706D3770372660B806F0B /* Spokium Dev.app */,
+				C7C706D3770372660B806F0B /* Spokium.app */,
 				8A67FBB0A349B37117D8FBC8 /* SpokiumTests.xctest */,
 			);
 			name = Products;
@@ -193,7 +197,7 @@
 				6A1812892103146FF2C6CC3E /* KeyboardShortcuts */,
 			);
 			productName = Spokium;
-			productReference = C7C706D3770372660B806F0B /* Spokium Dev.app */;
+			productReference = C7C706D3770372660B806F0B /* Spokium.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */

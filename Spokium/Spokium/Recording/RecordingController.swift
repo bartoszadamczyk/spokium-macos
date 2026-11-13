@@ -19,6 +19,7 @@ final class RecordingController {
             if state == .recording, oldValue == .starting {
                 startMacVolumeDuck()
             }
+            if state == .idle { scheduleIdleUnload() } else { idleUnloadTask?.cancel() }
             if wasCapturing, !isCapturing {
                 roomQuieter.end()
                 duckTask?.cancel()
@@ -29,6 +30,21 @@ final class RecordingController {
     }
     let roomQuieter = RoomQuieter()
     private var duckTask: Task<Void, Never>?
+    private var idleUnloadTask: Task<Void, Never>?
+
+    // A menu-bar app holding large-v3 (3 GB+ of RAM and GPU memory) forever while idle.
+    // The next recording reloads it during warm-up, while the user is still speaking.
+    static let idleUnloadDelay: Duration = .seconds(15 * 60)
+
+    private func scheduleIdleUnload() {
+        idleUnloadTask?.cancel()
+        idleUnloadTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.idleUnloadDelay)
+            guard let self, !Task.isCancelled, self.state == .idle, self.queue.queuedCount == 0 else { return }
+            self.logger.info("Idle for \(Self.idleUnloadDelay, privacy: .public) — unloading the model")
+            await self.queue.unload()
+        }
+    }
 
     // With sounds on, the start chime plays as recording goes live; ducking right
     // away would make it inaudible, so let it finish first.
@@ -41,6 +57,14 @@ final class RecordingController {
             guard let self, !Task.isCancelled, self.state == .starting || self.state == .recording else { return }
             MacVolumeDucker.duck()
         }
+    }
+
+    func stopForSleepOrLock(reason: String) {
+        guard state == .starting || state == .recording else { return }
+        logger.notice("Stopping the recording for \(reason, privacy: .public)")
+        copyInsteadOfPaste = true
+        sendAfterPaste = false
+        stop()
     }
 
     // A device ticked or unticked mid-recording: mute / un-mute just that one.
@@ -113,6 +137,8 @@ final class RecordingController {
     // Set when the session was stopped with the "stop and send" shortcut: press Return
     // after the paste.
     var sendAfterPaste = false
+    // Set when sleep or screen lock stopped the session: copy, don't paste.
+    var copyInsteadOfPaste = false
     var isResumingAfterSplit = false
     var stopTailTask: Task<Void, Never>?
     var stopRequestedAt: ContinuousClock.Instant?
@@ -147,6 +173,10 @@ final class RecordingController {
         KeyboardShortcuts.onKeyUp(for: .toggleRecording) { [weak self] in
             self?.handleKeyUp()
         }
+        KeyboardShortcuts.onKeyDown(for: .cancelRecording) { [weak self] in
+            self?.cancel()
+        }
+        KeyboardShortcuts.disable(.cancelRecording)
         KeyboardShortcuts.onKeyDown(for: .toggleRecordingAndSend) { [weak self] in
             self?.handleKeyDown(send: true)
         }
@@ -157,6 +187,18 @@ final class RecordingController {
             self?.handleAudioConfigurationChange()
         }
         AudioInputDeviceCache.shared.startListening()
+        // A recording left on must not keep listening to the room while the Mac sleeps
+        // or sits locked: stop it (what was said is kept, copied rather than pasted).
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.stopForSleepOrLock(reason: "sleep") }
+        }
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.stopForSleepOrLock(reason: "screen lock") }
+        }
         NotificationCenter.default.addObserver(
             forName: .audioInputDevicesChanged,
             object: nil,
@@ -376,7 +418,13 @@ final class RecordingController {
                 self.noAudioWarning = false
             }
         )
-        monitors.startAutoStop(after: AppDefaults.maxRecordingMinutes) { [weak self] in
+        // The limit is per recording: a device switch or continued segment restarts the
+        // monitors, so count from the session start rather than from now.
+        let minutes = AppDefaults.maxRecordingMinutes
+        guard minutes > 0 else { return }
+        let elapsed = sessionStartedAt.map { ContinuousClock.now - $0 } ?? .zero
+        let remaining = max(.seconds(1), .seconds(minutes * 60) - elapsed)
+        monitors.startAutoStop(after: remaining) { [weak self] in
             guard let self, case .recording = self.state else { return }
             self.logger.info("Auto-stopping recording (time limit reached)")
             self.stop()
@@ -392,8 +440,13 @@ final class RecordingController {
 
     // Session-scoped escape monitor — started once at session start, lives through
     // splits, stops only when the session fully unwinds.
+    // Recording a new cancel shortcut in Settings registers it; keep it off while idle.
+    func syncCancelShortcut() {
+        if state == .idle { monitors.stopEscape() } else { monitors.startEscape() }
+    }
+
     func startEscape() {
-        monitors.startEscape { [weak self] in self?.cancel() }
+        monitors.startEscape()
     }
 
     // Stops the engine off the main thread and deletes the segment it was writing.

@@ -43,7 +43,7 @@ nonisolated enum DebugRecordingStore {
         do {
             try ensureDirectoryExists()
         } catch {
-            logger.warning("Failed to create debug folder: \(error.localizedDescription, privacy: .public)")
+            logger.warning("Failed to create debug folder: \(error.localizedDescription, privacy: .private)")
             return
         }
         var movedDestinations: [URL] = []
@@ -61,7 +61,7 @@ nonisolated enum DebugRecordingStore {
                 try FileManager.default.moveItem(at: url, to: dest)
                 movedDestinations.append(dest)
             } catch {
-                logger.warning("Failed to move \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.warning("Failed to move \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .private)")
                 // Don't delete the source — let the user see whatever's there in the temp dir.
             }
         }
@@ -133,7 +133,7 @@ nonisolated enum DebugRecordingStore {
         do {
             try body.write(to: sidecarURL, atomically: true, encoding: .utf8)
         } catch {
-            logger.warning("Failed to write sidecar \(sidecarURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.warning("Failed to write sidecar \(sidecarURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .private)")
         }
     }
 

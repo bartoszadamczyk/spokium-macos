@@ -8,6 +8,12 @@ struct DictionaryTab: View {
     @State private var selection: Set<Entry.ID> = []
     @FocusState private var focused: Entry.ID?
     @State private var tokenCount: Int?
+    @AppStorage(DefaultsKey.liveTranscription) private var liveTranscription = AppDefaults.liveTranscriptionDefault
+
+    // Whisper keeps the last 224 prompt tokens. In live mode the prompt also carries
+    // ~200 characters (~50 tokens) of the previous text after the dictionary, so beyond
+    // ~174 the first entries are silently dropped.
+    private var tokenBudget: Int { liveTranscription ? 174 : 224 }
 
     struct Entry: Identifiable, Equatable {
         let id = UUID()
@@ -48,15 +54,17 @@ struct DictionaryTab: View {
                 }
             } accessory: {
                 if let tokenCount, prompt != nil {
-                    Text("\(entryCount) \(entryCount == 1 ? "entry" : "entries") · \(tokenCount) / 224 tokens")
-                        .foregroundStyle(tokenCount > 200 ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                    Text("\(entryCount) \(entryCount == 1 ? "entry" : "entries") · \(tokenCount) / \(tokenBudget) tokens")
+                        .foregroundStyle(tokenCount > tokenBudget - 24 ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
                 } else {
                     Text("\(entryCount) \(entryCount == 1 ? "entry" : "entries")")
                 }
             }
 
-            if let tokenCount, tokenCount > 200 {
-                Text("Approaching the token limit — entries may be truncated.")
+            if let tokenCount, tokenCount > tokenBudget - 24 {
+                Text(liveTranscription
+                     ? "Approaching the limit — with “Transcribe while recording” on, the previous sentence shares the prompt, so the first entries may be dropped."
+                     : "Approaching the token limit — entries may be truncated.")
                     .font(.callout)
                     .foregroundStyle(.orange)
             }

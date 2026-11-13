@@ -66,12 +66,12 @@ final class RoomQuieter {
                 let (_, response) = try await Self.session.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 if (200..<300).contains(status) {
-                    logger.info("Quiet \(method, privacy: .public) \(name, privacy: .public): \(status)")
+                    logger.info("Quiet \(method, privacy: .public) \(name, privacy: .private): \(status)")
                 } else {
-                    logger.notice("Quiet \(method, privacy: .public) \(name, privacy: .public): HTTP \(status)")
+                    logger.notice("Quiet \(method, privacy: .public) \(name, privacy: .private): HTTP \(status)")
                 }
             } catch {
-                logger.notice("Quiet \(method, privacy: .public) \(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                logger.notice("Quiet \(method, privacy: .public) \(name, privacy: .private) failed: \(error.localizedDescription, privacy: .private)")
             }
         }
     }

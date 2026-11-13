@@ -105,8 +105,7 @@ extension AppDelegate {
     @objc func copyRecentTranscript(_ sender: NSMenuItem) {
         guard let text = sender.representedObject as? String else { return }
         let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        Paster.writeTranscript(text, to: pasteboard)
         recordingOverlay.showFeedback(.copied, controller: controller)
     }
 

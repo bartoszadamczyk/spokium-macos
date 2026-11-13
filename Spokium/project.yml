@@ -103,16 +103,10 @@ targets:
       - path: ../DEV.md
         group: Docs
         buildPhase: none
-      - path: ../plan.md
-        group: Docs
-        buildPhase: none
-      - path: ../APP_REVIEW_IDEAS.md
+      - path: ../ROADMAP.md
         group: Docs
         buildPhase: none
       - path: ../LICENSE.txt
-        group: Docs
-        buildPhase: none
-      - path: ../REJECTED_IDEAS.md
         group: Docs
         buildPhase: none
       - path: ../SECURITY.md

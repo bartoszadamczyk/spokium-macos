@@ -10,8 +10,15 @@ enum PasteResult: Equatable {
 enum Paster {
     private static let logger = Logger(subsystem: "com.spokium.mac", category: "Paster")
 
+    // `copyOnly`: a session ended by sleep or screen lock. Pasting into whatever is in
+    // front after unlocking would be a surprise, and the 20 s restore would fire on wake
+    // and remove the transcript — so it's just left on the clipboard.
     @discardableResult
-    static func paste(_ text: String) async -> PasteResult {
+    static func paste(_ text: String, copyOnly: Bool = false) async -> PasteResult {
+        if copyOnly {
+            writeTranscript(text)
+            return .copied
+        }
         let autoPaste = AppDefaults.autoPaste
         let pasteboard = NSPasteboard.general
         let restorer = ClipboardRestorer.shared
@@ -69,9 +76,24 @@ enum Paster {
     }
 
     private static func writeToPasteboard(_ pasteboard: NSPasteboard, text: String) -> Int {
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        writeTranscript(text, to: pasteboard)
         return pasteboard.changeCount
+    }
+
+    // Transcripts stay on this Mac: .currentHostOnly keeps Handoff / Universal Clipboard
+    // from offering them to the user's other devices, and the nspasteboard.org markers
+    // ask clipboard-history apps (Raycast, Maccy, Paste, Alfred…) not to store them —
+    // otherwise every dictation ends up in a history on disk.
+    static func writeTranscript(_ text: String, to pasteboard: NSPasteboard = .general) {
+        guard AppDefaults.privateClipboard else {
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            return
+        }
+        pasteboard.prepareForNewContents(with: .currentHostOnly)
+        pasteboard.setString(text, forType: .string)
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
     }
 
     // "Stop and send": Return after the paste. The short wait lets the target app

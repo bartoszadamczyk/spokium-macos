@@ -157,7 +157,7 @@ final class TranscriptionQueue {
                 let samples = try AudioLoader.loadResampled(url: url)
                 allSamples.append(contentsOf: samples)
             } catch {
-                logger.warning("Failed to load segment \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.warning("Failed to load segment \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .private)")
             }
         }
 
@@ -212,7 +212,7 @@ final class TranscriptionQueue {
             logger.info("Transcription aborted")
             onComplete(.cancelled)
         } catch {
-            logger.error("Transcription failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("Transcription failed: \(error.localizedDescription, privacy: .private)")
             onComplete(.failure(.transcriptionFailed(error.localizedDescription)))
         }
     }
@@ -267,22 +267,26 @@ final class TranscriptionQueue {
     }
 
     func unload() async {
+        // Detach first: a warm-up that starts while these await (a recording beginning
+        // right as the idle unload runs) then creates a fresh transcriber instead of
+        // having its model discarded afterwards.
         let fallback = gpuFallback
+        let main = transcriber
         gpuFallback = nil
-        await fallback?.unload()
-        await transcriber?.unload()
         transcriber = nil
+        await fallback?.unload()
+        await main?.unload()
     }
 
     private func needsNewTranscriber(for modelURL: URL) -> Bool {
         guard let transcriber, transcriber.modelURL == modelURL, !transcriber.isStale else { return true }
-        // Marked unusable, or the mark was cleared (Retry in Settings).
+        // Switched off/on in Settings, marked unusable, or the mark cleared (Retry).
         let encoderInstalled = FileManager.default.fileExists(atPath: WhisperModel.coreMLURL(forModelAt: modelURL).path)
-        return encoderInstalled && transcriber.gpuOnly != CoreMLHealth.isUnusable(modelURL)
+        return encoderInstalled && transcriber.gpuOnly != CoreMLHealth.loadGPUOnly(modelURL)
     }
 
     private func makeTranscriber(modelURL: URL) -> Transcriber {
-        Transcriber(modelURL: modelURL, gpuOnly: CoreMLHealth.isUnusable(modelURL))
+        Transcriber(modelURL: modelURL, gpuOnly: CoreMLHealth.loadGPUOnly(modelURL))
     }
 
     // Never make a dictation wait for a Neural Engine load: until it's done, run on the
