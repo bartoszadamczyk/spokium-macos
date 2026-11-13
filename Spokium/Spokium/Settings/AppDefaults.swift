@@ -18,6 +18,10 @@ nonisolated enum DefaultsKey {
     static let playSounds = "playSounds"
     static let snippets = "snippets"
     static let quietEndpoints = "quietEndpoints"
+    static let macVolumeWhileRecording = "macVolumeWhileRecording"
+    // Volume to put back after a duck; present only while one is in effect, so a crash
+    // mid-recording is repaired on the next launch.
+    static let macVolumeDuck = "macVolumeDuck"
     // Model stems whose Neural Engine encoder never finished loading on this Mac.
     static let coreMLUnusableModels = "coreMLUnusableModels"
     static let selectedQuietEndpoint = "selectedQuietEndpoint"
@@ -50,6 +54,7 @@ nonisolated enum AppDefaults {
     static let dictionaryEntriesDefault = "Spokium"
     static let selectedInputDeviceDefault = ""
     static let selectedQuietEndpointDefault = ""
+    static let macVolumeWhileRecordingDefault = MacVolumeMode.unchanged.rawValue
     static let pushToRecordDefault = false
     static let playSoundsDefault = true
     static let keepRecentTranscriptsDefault = true
@@ -104,6 +109,11 @@ nonisolated enum AppDefaults {
     static var coreMLUnusableModels: [String] {
         get { store.stringArray(forKey: DefaultsKey.coreMLUnusableModels) ?? [] }
         set { store.set(newValue, forKey: DefaultsKey.coreMLUnusableModels) }
+    }
+
+    static var macVolumeWhileRecording: MacVolumeMode {
+        get { MacVolumeMode(rawValue: store.string(forKey: DefaultsKey.macVolumeWhileRecording) ?? "") ?? .unchanged }
+        set { store.set(newValue.rawValue, forKey: DefaultsKey.macVolumeWhileRecording) }
     }
 
     // QuietEndpoint.id as a string; "" = none.

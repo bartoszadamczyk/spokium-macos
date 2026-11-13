@@ -118,19 +118,38 @@ extension AppDelegate {
         DebugRecordingStore.revealInFinder()
     }
 
-    // Hidden until a device is added in Settings → Integrations.
+    // "This Mac" (volume while recording) first, then the devices from Settings →
+    // Integrations, if any.
     func refreshQuietMenu() {
         quietMenu.removeAllItems()
         let endpoints = QuietEndpointStore.load()
-        quietItem.isHidden = endpoints.isEmpty
+        quietItem.isHidden = false
         let selected = AppDefaults.selectedQuietEndpoint
+
+        let macHeader = NSMenuItem(title: "This Mac", action: nil, keyEquivalent: "")
+        macHeader.isEnabled = false
+        quietMenu.addItem(macHeader)
+        let currentMode = AppDefaults.macVolumeWhileRecording
+        for mode in MacVolumeMode.allCases {
+            let item = NSMenuItem(title: mode.title, action: #selector(selectMacVolumeMode(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            item.state = mode == currentMode ? .on : .off
+            item.indentationLevel = 1
+            quietMenu.addItem(item)
+        }
+        guard !endpoints.isEmpty else { return }
+        quietMenu.addItem(.separator())
+        let devicesHeader = NSMenuItem(title: "Devices", action: nil, keyEquivalent: "")
+        devicesHeader.isEnabled = false
+        quietMenu.addItem(devicesHeader)
 
         let none = NSMenuItem(title: "None", action: #selector(selectQuietEndpoint(_:)), keyEquivalent: "")
         none.target = self
         none.representedObject = ""
         none.state = selected.isEmpty ? .on : .off
+        none.indentationLevel = 1
         quietMenu.addItem(none)
-        quietMenu.addItem(.separator())
         for endpoint in endpoints {
             let item = NSMenuItem(
                 title: endpoint.name.isEmpty ? endpoint.url : endpoint.name,
@@ -140,8 +159,14 @@ extension AppDelegate {
             item.target = self
             item.representedObject = endpoint.id.uuidString
             item.state = endpoint.id.uuidString == selected ? .on : .off
+            item.indentationLevel = 1
             quietMenu.addItem(item)
         }
+    }
+
+    @objc func selectMacVolumeMode(_ sender: NSMenuItem) {
+        let mode = MacVolumeMode(rawValue: sender.representedObject as? String ?? "") ?? .unchanged
+        AppDefaults.macVolumeWhileRecording = mode
     }
 
     @objc func selectQuietEndpoint(_ sender: NSMenuItem) {

@@ -47,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         cleanStaleTempFiles()
         DebugRecordingStore.cleanIfDisabled()
+        // Repairs a duck left behind by a crash or force-quit mid-recording.
+        MacVolumeDucker.restore()
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.menu = buildMenu()

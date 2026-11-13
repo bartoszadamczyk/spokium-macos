@@ -80,7 +80,8 @@ spokium-macos/
         │                           #   ModelLocator (directory management + migration),
         │                           #   SilenceDetector, DictionaryPromptBuilder, LoopDetector,
         │                           #   LiveChunker, LiveTranscriptAssembler (pure helpers)
-        ├── Quiet/                  # QuietEndpoint (+ store), RoomQuieter (POST/refresh/DELETE)
+        ├── Quiet/                  # QuietEndpoint (+ store), RoomQuieter (POST/refresh/DELETE),
+        │                           #   MacVolumeDucker (Core Audio output volume while recording)
         ├── Hotkey/                 # HotkeyName (KeyboardShortcuts.Name extension)
         ├── Paste/                  # Paster (pasteboard + CGEvent ⌘V simulation),
         │                           #   ClipboardRestorer (delayed restore of previous clipboard)
@@ -222,7 +223,7 @@ This is a developer affordance for diagnosing whisper hallucinations and false-p
 
 ## Settings layer (`Spokium/Settings/AppDefaults.swift`)
 
-All persisted settings flow through `AppDefaults` (typed accessors) and `DefaultsKey` (key string constants). Production code uses `AppDefaults.foo` for reads/writes; SwiftUI views use `@AppStorage(DefaultsKey.foo)` with inline `AppDefaults.fooDefault` constants for the fallback. Direct `UserDefaults.standard` usage is limited to `Snippets`, `QuietEndpointStore`, `ModelPerformanceStore` and `LanguageUsageStore`, which own their own JSON-encoded blobs and reference `DefaultsKey.snippets` / `DefaultsKey.modelPerformance` / `DefaultsKey.languageUsage` respectively.
+All persisted settings flow through `AppDefaults` (typed accessors) and `DefaultsKey` (key string constants). Production code uses `AppDefaults.foo` for reads/writes; SwiftUI views use `@AppStorage(DefaultsKey.foo)` with inline `AppDefaults.fooDefault` constants for the fallback. Direct `UserDefaults.standard` usage is limited to `Snippets`, `QuietEndpointStore`, `MacVolumeDucker` (its transient duck record), `ModelPerformanceStore` and `LanguageUsageStore`, which own their own JSON-encoded blobs and reference `DefaultsKey.snippets` / `DefaultsKey.modelPerformance` / `DefaultsKey.languageUsage` respectively.
 
 When adding a new setting:
 1. Add the key constant to `DefaultsKey` and the default value constant to `AppDefaults`.
@@ -253,6 +254,8 @@ The layer is `nonisolated` so it's callable from any actor context. `UserDefault
 | `quietEndpoints` | Data | `[]` (JSON `[QuietEndpoint]`) | IntegrationsTab, QuietEndpointStore |
 | `selectedQuietEndpoint` | String (endpoint UUID) | `""` (none) | IntegrationsTab, menu "Quiet While Recording", RoomQuieter |
 | `coreMLUnusableModels` | [String] (model stems) | `[]` | CoreMLHealth (set after a 10-min Neural Engine load), Model tab Retry |
+| `macVolumeWhileRecording` | String (`unchanged`/`lower`/`mute`) | `unchanged` | IntegrationsTab, menu "Quiet While Recording", MacVolumeDucker |
+| `macVolumeDuck` | Data (JSON, transient) | absent | MacVolumeDucker: volume to restore; present only while a duck is in effect, repaired at launch |
 | `languageUsage` | Data | `{}` (JSON `[code: characters]`) | LanguageUsageStore (recorded in TranscriptionQueue, shown in TranscriptionTab) |
 | `voiceActivityDetection` | Bool (hidden, terminal only) | `true` | RecordingController+Live (Silero VAD vs RMS chunking) |
 

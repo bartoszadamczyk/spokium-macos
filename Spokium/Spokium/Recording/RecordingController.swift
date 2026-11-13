@@ -12,11 +12,36 @@ final class RecordingController {
             // Quiet from the moment the mic starts until stop; transcription needs no quiet.
             let wasCapturing = oldValue == .starting || oldValue == .recording
             let isCapturing = state == .starting || state == .recording
-            if isCapturing, !wasCapturing { roomQuieter.begin() }
-            if wasCapturing, !isCapturing { roomQuieter.end() }
+            if isCapturing, !wasCapturing {
+                roomQuieter.begin()
+            }
+            // Once the mic is live (the start chime plays then), not at .starting.
+            if state == .recording, oldValue == .starting {
+                startMacVolumeDuck()
+            }
+            if wasCapturing, !isCapturing {
+                roomQuieter.end()
+                duckTask?.cancel()
+                duckTask = nil
+                MacVolumeDucker.restore()
+            }
         }
     }
     let roomQuieter = RoomQuieter()
+    private var duckTask: Task<Void, Never>?
+
+    // With sounds on, the start chime plays as recording goes live; ducking right
+    // away would make it inaudible, so let it finish first.
+    private func startMacVolumeDuck() {
+        guard AppDefaults.macVolumeWhileRecording != .unchanged else { return }
+        duckTask?.cancel()
+        let delay: Duration = AppDefaults.playSounds ? .milliseconds(500) : .zero
+        duckTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, !Task.isCancelled, self.state == .starting || self.state == .recording else { return }
+            MacVolumeDucker.duck()
+        }
+    }
 
     // Moving rooms mid-recording: un-mute the old device, mute the new one.
     func quietEndpointChanged() {
@@ -197,6 +222,7 @@ final class RecordingController {
 
     func cleanup() async {
         roomQuieter.end()
+        MacVolumeDucker.restore()
         // Halt whisper between graph computations. unload() below serialises after
         // the in-flight transcribe() exits, so it sees the freed-context state.
         queue.abort()
