@@ -1,3 +1,3 @@
 // Bumped by scripts/release.sh. The only place versions live.
-MARKETING_VERSION = 1.5.3
-CURRENT_PROJECT_VERSION = 36
+MARKETING_VERSION = 1.5.4
+CURRENT_PROJECT_VERSION = 37
