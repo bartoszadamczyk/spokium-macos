@@ -149,7 +149,7 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Spokium contacts the devices you add under “Quiet while recording” to mute them while you dictate."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Spokium finds and contacts the devices you tick under “Quiet while recording” to mute them while you dictate."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Spokium records audio to transcribe your dictation locally.
         LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/../Frameworks"]
         MACOSX_DEPLOYMENT_TARGET: "26.3"

@@ -17,7 +17,7 @@ struct OutputTab: View {
             }
             Section("Clipboard") {
                 Toggle(isOn: $preserveClipboard) {
-                    Text("Restore clipboard 20 s after transcribing")
+                    Text("Restore clipboard 5 s after transcribing")
                     Text("The transcript stays on the clipboard long enough to paste it manually, then your previous clipboard comes back — unless you copy something else first.")
                 }
                 Toggle(isOn: $privateClipboard) {

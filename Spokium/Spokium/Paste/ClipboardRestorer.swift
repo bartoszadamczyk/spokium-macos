@@ -13,7 +13,7 @@ import AppKit
 final class ClipboardRestorer {
     typealias Snapshot = [[(NSPasteboard.PasteboardType, Data)]]
 
-    static let shared = ClipboardRestorer(pasteboard: .general, delay: .seconds(20))
+    static let shared = ClipboardRestorer(pasteboard: .general, delay: .seconds(5))
 
     private let pasteboard: NSPasteboard
     private let delay: Duration

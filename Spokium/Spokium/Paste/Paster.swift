@@ -11,7 +11,7 @@ enum Paster {
     private static let logger = Logger(subsystem: "com.spokium.mac", category: "Paster")
 
     // `copyOnly`: a session ended by sleep or screen lock. Pasting into whatever is in
-    // front after unlocking would be a surprise, and the 20 s restore would fire on wake
+    // front after unlocking would be a surprise, and the 5 s restore would fire on wake
     // and remove the transcript — so it's just left on the clipboard.
     @discardableResult
     static func paste(_ text: String, copyOnly: Bool = false) async -> PasteResult {
