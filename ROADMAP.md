@@ -45,7 +45,6 @@ From the Nov 2026 code review; everything else in it is done (see **Done**).
 
 ## Ideas (not committed to)
 
-- **Radio list from the radios themselves** — announce over Bonjour or serve a list at one URL, so Spokium shows and ticks them instead of typing URLs. Specific to the user's own radio implementation (needs a radio-side protocol to know what is a radio).
 - **Retry failed chunks** (was D5). A plain re-run is unlikely to help; it would need a different seed, temperature or chunk length. Today a failed live chunk leaves a hole in the text and an alert.
 - **Out-of-list language with more context** — before forcing a language, re-transcribe the chunk merged with its neighbour and de-duplicate via word timestamps.
 - **Adaptive keep threshold for very quiet whispering.** Measured on a real 33.7 s whisper: window RMS 0.001–0.004 (room ≈ 0.001), Silero max 0.14–0.22; only ~10 s reached whisper, which transcribed it confidently. Keep a window if Silero ≥ 0.1 or RMS ≥ ~2.5× the session's noise floor. Parked after the user reported whispering "way better".
@@ -68,7 +67,7 @@ Worth re-running after audio or session changes, in the dev build:
 5. Push-to-record quick tap; stop right after a pause; stop and send (⇧⌘;).
 6. Sleep / lock mid-recording → transcript copied, not pasted.
 7. "Transcribe while recording" off → single-pass path works.
-8. Quiet while recording: several devices ticked; untick one mid-recording; Mac volume lowered and restored.
+8. Quiet while recording: several devices ticked; untick one mid-recording; Mac volume lowered and restored; a radio announcing `_spokium-quiet._tcp` shows up in Integrations, and still gets quieted after its address changes.
 
 ## Rejected
 
@@ -108,7 +107,7 @@ Don't re-add unless the user explicitly revisits them.
 
 ## Done
 
-**1.5.4 (unreleased at the time of writing):** cancel shortcut back to a session-only Carbon hotkey with the standard recorder (default ⌘⎋; saved Shift-only ones reset); per-model "Use" checkbox for the Neural Engine encoder; private clipboard (current-host-only + transient/concealed markers, toggle in Output); recordings stop on sleep / screen lock (copied, not pasted); model unloaded after 15 idle minutes; dictionary token budget shows ~174 in live mode; auto-stop limit counts per recording; device names, UIDs, quiet-device names and error texts private in logs; Hugging Face downloads pinned to a commit; quiet devices multi-select; single "Lower the Mac's volume" toggle; release script refuses dirty trees, keeps dSYMs, commits and tags.
+**1.5.4 (unreleased at the time of writing):** cancel shortcut back to a session-only Carbon hotkey with the standard recorder (default ⌘⎋; saved Shift-only ones reset); per-model "Use" checkbox for the Neural Engine encoder; private clipboard (current-host-only + transient/concealed markers, toggle in Output); recordings stop on sleep / screen lock (copied, not pasted); model unloaded after 15 idle minutes; dictionary token budget shows ~174 in live mode; auto-stop limit counts per recording; device names, UIDs, quiet-device names and error texts private in logs; Hugging Face downloads pinned to a commit; quiet devices multi-select; single "Lower the Mac's volume" toggle; release script refuses dirty trees, keeps dSYMs, commits and tags; quiet devices announcing `_spokium-quiet._tcp` (TXT `id`, `name`, `path`) appear in Integrations by themselves, added unticked and kept up to date by `id`.
 
 **1.5.3:** lower or mute the Mac's volume while recording; update flow quits the running app only when idle and relaunches it.
 

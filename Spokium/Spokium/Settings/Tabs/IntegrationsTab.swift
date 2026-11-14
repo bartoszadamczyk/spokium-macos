@@ -6,6 +6,7 @@ struct IntegrationsTab: View {
     @State private var lowerMacVolume = AppDefaults.lowerMacVolumeWhileRecording
     @State private var selection: Set<QuietEndpoint.ID> = []
     @FocusState private var focused: QuietEndpoint.ID?
+    @State private var online: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -18,7 +19,7 @@ struct IntegrationsTab: View {
                 .onChange(of: lowerMacVolume) { _, on in AppDefaults.lowerMacVolumeWhileRecording = on }
                 .help("Turns this Mac's sound down while you record and back up when you stop — unless you changed the volume yourself in the meantime.")
 
-            Text("Devices such as a home-made radio — tick the ones to quiet. Spokium sends each a POST when recording starts, repeats it every 20 s, and DELETE when you stop. Nothing about the recording is sent.")
+            Text("Devices such as a home-made radio — tick the ones to quiet. Devices that announce themselves on this network (`_spokium-quiet._tcp`) appear here by themselves; others can be added by URL. Spokium sends each a POST when recording starts, repeats it every 20 s, and DELETE when you stop. Nothing about the recording is sent.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -41,11 +42,21 @@ struct IntegrationsTab: View {
                             ))
                             .toggleStyle(.checkbox)
                             .help("Quiet this device while recording")
-                            TextField("Name", text: $endpoint.name, prompt: Text("Name"))
-                                .focused($focused, equals: endpoint.id)
-                                .frame(width: 120)
-                            TextField("URL", text: $endpoint.url, prompt: Text("http://radio.local/quiet"))
-                                .foregroundStyle(endpoint.url.isEmpty || endpoint.validURL != nil ? .primary : Color.red)
+                            if endpoint.isDiscovered {
+                                // Name and address come from the device itself.
+                                Text(endpoint.name)
+                                    .frame(width: 120, alignment: .leading)
+                                Text(online.contains(endpoint.discoveredID ?? "") ? "On this network" : "Not found right now")
+                                    .foregroundStyle(.secondary)
+                                    .help(endpoint.url)
+                                Spacer()
+                            } else {
+                                TextField("Name", text: $endpoint.name, prompt: Text("Name"))
+                                    .focused($focused, equals: endpoint.id)
+                                    .frame(width: 120)
+                                TextField("URL", text: $endpoint.url, prompt: Text("http://radio.local/quiet"))
+                                    .foregroundStyle(endpoint.url.isEmpty || endpoint.validURL != nil ? .primary : Color.red)
+                            }
                         }
                         .textFieldStyle(.plain)
                         .labelsHidden()
@@ -55,6 +66,23 @@ struct IntegrationsTab: View {
             }
         }
         .padding()
+        // Browsing makes macOS ask for local-network access: only while this tab is open.
+        .onAppear {
+            QuietDiscovery.shared.onChange = {
+                online = QuietDiscovery.shared.online
+            }
+            QuietDiscovery.shared.start()
+        }
+        .onDisappear {
+            QuietDiscovery.shared.stop()
+            QuietDiscovery.shared.onChange = nil
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .quietEndpointsChanged) {
+                let stored = QuietEndpointStore.load()
+                if stored != quietEndpoints { quietEndpoints = stored }
+            }
+        }
         .onChange(of: quietEndpoints) { oldValue, newValue in
             QuietEndpointStore.save(newValue)
             // Only when the ticked set changes — not on every keystroke in a name or URL,

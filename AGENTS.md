@@ -24,7 +24,7 @@ What's next, open findings, ideas and **rejected ideas** (don't re-propose those
 
 ## Hard constraints
 
-- **No network calls** for transcription or telemetry. Allowed network use: model downloads from Hugging Face, and the "Quiet while recording" endpoints — URLs the user types in themselves (e.g. a home-made radio), sent a bare `POST` at recording start (repeated every 20 s; each restarts the device's ~30 s mute) and `DELETE` at stop. No body, no headers, nothing about the recording. This is not a licence for general app automation or other outbound calls. Plain `http` is limited to the local network (`NSAllowsLocalNetworking`); `check.sh` fails if `NSAllowsArbitraryLoads` appears.
+- **No network calls** for transcription or telemetry. Allowed network use: model downloads from Hugging Face, and the "Quiet while recording" endpoints — URLs the user types in themselves (e.g. a home-made radio) or devices found on the local network via Bonjour `_spokium-quiet._tcp` (TXT `id`, `name`, `path`; added unticked, the user ticks them), sent a bare `POST` at recording start (repeated every 20 s; each restarts the device's ~30 s mute) and `DELETE` at stop. No body, no headers, nothing about the recording. This is not a licence for general app automation or other outbound calls. Plain `http` is limited to the local network (`NSAllowsLocalNetworking`); `check.sh` fails if `NSAllowsArbitraryLoads` appears.
 - **No transcription history on disk.** The pasted text must not be persisted. Logs must not include transcribed content — log only metadata (language, character count). `LanguageUsageStore` persists characters-per-language counts (no text) — same posture as `ModelPerformanceStore`. `TranscriptHistory` keeps the last 5 transcripts in memory only, for 5 minutes, when `AppDefaults.keepRecentTranscripts` is true (default **true** since 2026-11-06, user can turn it off in Settings → Output); the store is cleared on `RecordingController.cleanup()` and via the "Clear History" menu item, and never serialised.
 - **No dock icon ever.** `LSUIElement = true` is set through generated Info.plist build settings. Settings windows are brought to front via `NSApp.activate(ignoringOtherApps: true)` + `makeKeyAndOrderFront`; do not switch the app to `.regular`.
 - **Restore the pasteboard** after pasting so we don't clobber whatever the user had copied (when enabled in settings). `ClipboardRestorer` rules: skip the restore if anything else was copied meanwhile (changeCount moved); a new transcript before the restore keeps the *original* clipboard pending; `RecordingController.cleanup()` restores immediately on quit.
@@ -83,6 +83,7 @@ spokium-macos/
         │                           #   SilenceDetector, DictionaryPromptBuilder, LoopDetector,
         │                           #   LiveChunker, LiveTranscriptAssembler (pure helpers)
         ├── Quiet/                  # QuietEndpoint (+ store), RoomQuieter (POST/refresh/DELETE),
+        │                           #   QuietDiscovery (Bonjour browse for _spokium-quiet._tcp),
         │                           #   MacVolumeDucker (Core Audio output volume while recording)
         ├── Hotkey/                 # HotkeyName (KeyboardShortcuts.Name extension)
         ├── Paste/                  # Paster (pasteboard + CGEvent ⌘V simulation),

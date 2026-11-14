@@ -47,3 +47,31 @@ struct QuietEndpointMultiSelectTests {
         #expect(Set(QuietEndpointStore.enabled.map(\.id)) == [kitchen, office])
     }
 }
+
+@MainActor
+struct QuietDiscoveryMergeTests {
+    private func withEmptyStore(_ body: () throws -> Void) rethrows {
+        let saved = UserDefaults.standard.data(forKey: DefaultsKey.quietEndpoints)
+        defer { UserDefaults.standard.set(saved, forKey: DefaultsKey.quietEndpoints) }
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.quietEndpoints)
+        try body()
+    }
+
+    @Test
+    func foundDevice_isAddedUnticked_thenUpdatedInPlaceByID() throws {
+        try withEmptyStore {
+            let first = try #require(URL(string: "http://192.168.1.20:80/api/duck"))
+            QuietEndpointStore.merge(.init(id: "dev-1", name: "Kitchen", url: first))
+            var all = QuietEndpointStore.load()
+            #expect(all.count == 1 && all[0].isDiscovered && !all[0].enabled)
+
+            QuietEndpointStore.setEnabled(true, id: all[0].id)
+            // New address and a renamed room: same entry, tick kept.
+            let moved = try #require(URL(string: "http://192.168.1.31:80/api/duck"))
+            QuietEndpointStore.merge(.init(id: "dev-1", name: "Kitchen (new)", url: moved))
+            all = QuietEndpointStore.load()
+            #expect(all.count == 1)
+            #expect(all[0].name == "Kitchen (new)" && all[0].url == moved.absoluteString && all[0].enabled)
+        }
+    }
+}

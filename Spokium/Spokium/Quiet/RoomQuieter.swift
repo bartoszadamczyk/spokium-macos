@@ -24,6 +24,11 @@ final class RoomQuieter {
     }()
 
     func begin() {
+        // A ticked device found on the network may have a new address; recording
+        // doesn't wait — the saved one is used now, a found one from the next refresh.
+        if QuietEndpointStore.enabled.contains(where: \.isDiscovered) {
+            QuietDiscovery.shared.refresh()
+        }
         update()
         guard refreshTask == nil, !active.isEmpty else { return }
         refreshTask = Task { [weak self] in
